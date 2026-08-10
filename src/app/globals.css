@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@theme {
+  --color-royal: #1d4ed8;
+  --color-royal-hover: #1e40af;
+  --color-slate-850: #131d30;
+  --color-slate-950: #040914;
+  --color-navy: #0b1528;
+  --color-navy-card: #0f1d36;
+}
+
+:root {
+  --background: #040914;
+  --foreground: #f8fafc;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Styles */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-card {
+  background: rgba(15, 29, 54, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(15, 29, 54, 0.55);
+  border-color: rgba(29, 78, 216, 0.3);
+  box-shadow: 0 12px 40px 0 rgba(29, 78, 216, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Custom Scrollbar for Enterprise Grid Views */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #040914;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Neon Glows */
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.glow-blue {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+}
+
+.glow-royal {
+  box-shadow: 0 0 20px rgba(29, 78, 216, 0.25);
+}
+
+/* Custom Table Layouts */
+.enterprise-table th {
+  letter-spacing: 0.075em;
+  font-weight: 800;
+}
+
+.enterprise-table tr {
+  transition: background-color 0.2s ease;
+}
+
+/* Animation Timings */
+.animate-slow-fade {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================
+   ROLE-BASED CLIENT SIDE MUTATION CONTROL
+   ========================================================== */
+
+/* Restrict VIEWER role universally */
+.role-viewer button:has(.lucide-plus),
+.role-viewer button:has(.lucide-edit-2),
+.role-viewer button:has(.lucide-trash-2),
+.role-viewer button:has(.lucide-toggle-left),
+.role-viewer button:has(.lucide-toggle-right),
+.role-viewer button:has(.lucide-upload-cloud),
+.role-viewer button:has(.lucide-save),
+.role-viewer button:has(.lucide-trash),
+.role-viewer button:has(.lucide-plus-circle),
+.role-viewer button:has(.lucide-send),
+.role-viewer .btn-action,
+.role-viewer button.bg-royal,
+.role-viewer button[title*="Edit"],
+.role-viewer button[title*="Delete"],
+.role-viewer button[title*="Register"],
+.role-viewer button[title*="Upload"] {
+  display: none !important;
+}
+
+.role-viewer select,
+.role-viewer textarea,
+.role-viewer input[type="text"]:not([placeholder*="Search"]):not([placeholder*="search"]),
+.role-viewer input[type="number"],
+.role-viewer input[type="email"] {
+  pointer-events: none !important;
+  opacity: 0.6 !important;
+}
+
+/* Restrict EXECUTIVE role from modifying master database parameters */
+.role-executive.page-banks button:has(.lucide-plus),
+.role-executive.page-banks button:has(.lucide-edit-2),
+.role-executive.page-banks button:has(.lucide-trash-2),
+.role-executive.page-banks button:has(.lucide-toggle-left),
+.role-executive.page-banks button:has(.lucide-toggle-right),
+.role-executive.page-banks button.bg-royal,
+.role-executive.page-companies button:has(.lucide-plus),
+.role-executive.page-companies button:has(.lucide-edit-2),
+.role-executive.page-companies button:has(.lucide-trash-2),
+.role-executive.page-companies button:has(.lucide-toggle-left),
+.role-executive.page-companies button:has(.lucide-toggle-right),
+.role-executive.page-companies button.bg-royal,
+.role-executive.page-categories button:has(.lucide-plus),
+.role-executive.page-categories button:has(.lucide-edit-2),
+.role-executive.page-categories button:has(.lucide-trash-2),
+.role-executive.page-categories button:has(.lucide-toggle-left),
+.role-executive.page-categories button:has(.lucide-toggle-right),
+.role-executive.page-categories button.bg-royal,
+.role-executive.page-pincodes button:has(.lucide-plus),
+.role-executive.page-pincodes button:has(.lucide-edit-2),
+.role-executive.page-pincodes button:has(.lucide-trash-2),
+.role-executive.page-pincodes button.bg-royal,
+.role-executive.page-policies button:has(.lucide-plus),
+.role-executive.page-policies button:has(.lucide-edit-2),
+.role-executive.page-policies button:has(.lucide-trash-2),
+.role-executive.page-policies button.bg-royal,
+.role-executive.page-loan-products button:has(.lucide-plus),
+.role-executive.page-loan-products button:has(.lucide-edit-2),
+.role-executive.page-loan-products button:has(.lucide-trash-2),
+.role-executive.page-loan-products button.bg-royal {
+  display: none !important;
+}
