@@ -257,6 +257,10 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [filterCode, setFilterCode] = useState("");
+  const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
+  const [selectAllGlobally, setSelectAllGlobally] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState<number | null>(null);
 
   const fetchErrors = async (p = 1, code = filterCode) => {
     setLoading(true);
@@ -267,6 +271,8 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
       if (res.data.success) {
         setData(res.data.data);
         setPage(p);
+        setSelectedErrors(new Set()); // Clear selection on page change
+        setSelectAllGlobally(false);
       }
     } catch (err) {
       console.error(err);
@@ -283,6 +289,51 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
     fetchErrors(1, next);
   };
 
+  const toggleSelectAll = () => {
+    if (!data) return;
+    if (selectAllGlobally || selectedErrors.size > 0) {
+      setSelectAllGlobally(false);
+      setSelectedErrors(new Set());
+    } else {
+      setSelectAllGlobally(true);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    if (selectAllGlobally) {
+      setSelectAllGlobally(false);
+      const next = new Set(data?.items.map((i) => i.id) || []);
+      next.delete(id);
+      setSelectedErrors(next);
+    } else {
+      const next = new Set(selectedErrors);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setSelectedErrors(next);
+    }
+  };
+
+  const handleForceSync = async () => {
+    if (!selectAllGlobally && selectedErrors.size === 0) return;
+    setSyncing(true);
+    setSyncSuccess(null);
+    try {
+      const res = await apiClient.post(`/import/${item.id}/force-sync`, {
+        errorIds: selectAllGlobally ? [] : Array.from(selectedErrors),
+        forceSyncAll: selectAllGlobally,
+        filterCode: selectAllGlobally ? filterCode : undefined,
+      });
+      if (res.data.success) {
+        setSyncSuccess(res.data.data.forceSynced);
+        fetchErrors(page);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Force sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
@@ -297,15 +348,47 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
               {item.fileName} · {item.failedRecords.toLocaleString()} failed rows
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          
+          <div className="flex items-center gap-3">
+            {data && data.items.length > 0 && (
+              <button
+                onClick={toggleSelectAll}
+                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 hover:text-white text-[10px] font-black text-slate-300 uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                {selectAllGlobally || selectedErrors.size > 0 ? "Deselect All" : `Select All ${data.total.toLocaleString()}`}
+              </button>
+            )}
+            
+            {(selectAllGlobally || selectedErrors.size > 0) && (
+              <button
+                onClick={handleForceSync}
+                disabled={syncing}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-[10px] font-black tracking-wider uppercase shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                Force Sync ({selectAllGlobally ? data?.total.toLocaleString() : selectedErrors.size})
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {syncSuccess !== null && (
+            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
+              <BadgeCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] text-emerald-300 font-bold">Successfully synced {syncSuccess} records!</p>
+                <p className="text-[9px] text-emerald-400/80 mt-0.5">They have been added to the database and removed from this error log.</p>
+              </div>
+            </div>
+          )}
+
           {/* Breakdown pills */}
           {data && data.breakdown.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -352,6 +435,14 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-950 border-b border-slate-800">
+                    <th className="py-3 px-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectAllGlobally || (data.items.length > 0 && selectedErrors.size === data.items.length)}
+                        onChange={toggleSelectAll}
+                        className="rounded bg-slate-900 border-slate-700 text-royal focus:ring-royal/50"
+                      />
+                    </th>
                     {["Row #", "Error Code", "Message", "Raw Data"].map((col) => (
                       <th key={col} className="py-3 px-4 text-[9px] font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
@@ -361,7 +452,15 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
                 </thead>
                 <tbody className="divide-y divide-slate-900">
                   {data.items.map((err) => (
-                    <tr key={err.id} className="hover:bg-slate-800/30 transition-colors">
+                    <tr key={err.id} className={`hover:bg-slate-800/30 transition-colors ${selectAllGlobally || selectedErrors.has(err.id) ? "bg-slate-800/20" : ""}`}>
+                      <td className="py-2.5 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectAllGlobally || selectedErrors.has(err.id)}
+                          onChange={() => toggleSelect(err.id)}
+                          className="rounded bg-slate-900 border-slate-700 text-royal focus:ring-royal/50"
+                        />
+                      </td>
                       <td className="py-2.5 px-4 text-[10px] font-black text-slate-300 whitespace-nowrap">
                         #{err.rowNumber}
                       </td>

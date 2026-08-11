@@ -106,7 +106,8 @@ export default function AdminSidebar() {
       id: "data",
       icon: UploadCloud,
       items: [
-        { name: "Excel Upload", href: "/import", icon: UploadCloud },
+        { name: "Company Excel Upload", href: "/import", icon: UploadCloud },
+        { name: "Pincode Excel Upload", href: "/pincodes/import", icon: UploadCloud },
         { name: "Import History", href: "/import-history", icon: History },
       ],
     },
