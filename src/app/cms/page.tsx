@@ -363,7 +363,7 @@ export default function AdminCMSPage() {
                           type="text"
                           value={supportPhone}
                           onChange={(e) => setSupportPhone(e.target.value)}
-                          placeholder="+91-85100-88409"
+                          placeholder="e.g. +91 98765 43210"
                           className={`${inputCls} pl-9`}
                         />
                       </div>
