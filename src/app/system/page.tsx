@@ -27,6 +27,7 @@ export default function AdminSystemPage() {
   const [smsApiKey, setSmsApiKey] = useState("");
   const [whatsappApiKey, setWhatsappApiKey] = useState("");
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [twoStepVerification, setTwoStepVerification] = useState(true);
 
   const fetchSystemSettings = async () => {
     setLoading(true);
@@ -46,6 +47,9 @@ export default function AdminSystemPage() {
         }
         if (data.maintenance !== undefined) {
           setMaintenanceMode(Boolean(data.maintenance));
+        }
+        if (data.twoStepVerification !== undefined) {
+          setTwoStepVerification(Boolean(data.twoStepVerification));
         }
       }
     } catch (err) {
@@ -68,6 +72,7 @@ export default function AdminSystemPage() {
       smtp: { host: smtpHost, port: smtpPort, user: smtpUser, password: smtpPassword },
       gateways: { smsKey: smsApiKey, whatsappKey: whatsappApiKey },
       maintenance: maintenanceMode,
+      twoStepVerification: twoStepVerification,
     };
 
     try {
@@ -236,6 +241,30 @@ export default function AdminSystemPage() {
 
                 <p className="text-xs text-slate-400 font-semibold">
                   Toggling maintenance mode will restrict public applicant access and display a system upgrade banner across the landing page. Admin portal remains active.
+                </p>
+              </div>
+              {/* Security Configuration */}
+              <div className="bg-slate-900 rounded-3xl p-8 border border-slate-800 shadow-2xl space-y-6 lg:col-span-2 mt-[-1rem]">
+                <div className="flex items-center justify-between border-b border-slate-850 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <h2 className="text-sm font-black text-white uppercase tracking-wider">Admin Security Settings</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTwoStepVerification(!twoStepVerification)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                      twoStepVerification
+                        ? "bg-emerald-500 text-slate-950 border-emerald-400 shadow-md"
+                        : "bg-slate-950 text-slate-400 border-slate-850 hover:text-white"
+                    }`}
+                  >
+                    {twoStepVerification ? "TWO-STEP VERIFICATION IS ON" : "TWO-STEP VERIFICATION IS OFF"}
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-400 font-semibold">
+                  Toggling two-step verification adds an extra layer of security for administrator logins. All admin accounts will require a code sent to their registered email/phone.
                 </p>
               </div>
             </form>
