@@ -24,11 +24,24 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 text-slate-100 selection:bg-royal selection:text-white">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl space-y-8">
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-royal text-white flex items-center justify-center mx-auto shadow-lg shadow-royal/30">
-            <Building2 className="w-8 h-8 text-white" />
+        <div className="text-center space-y-3 select-none">
+          <img
+            src="/brand/nvit-icon-animated.svg"
+            alt="NVIT.SPACE"
+            className="nvit-logo w-14 h-14 mx-auto shrink-0"
+            width="56"
+            height="56"
+          />
+          <div className="space-y-1">
+            <h1 className="text-2xl tracking-tight text-white flex items-center justify-center">
+              <span className="font-semibold">NVIT</span>
+              <span className="text-blue-500 font-semibold">.</span>
+              <span className="font-light">SPACE</span>
+            </h1>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+              Admin Portal Login
+            </p>
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Admin Portal Login</h1>
           <p className="text-xs text-slate-400 font-medium">
             NVIT Solution Loan Policy & Verification Control Center
           </p>
