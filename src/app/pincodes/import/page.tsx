@@ -202,13 +202,22 @@ export default function AdminImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load banks ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    apiClient.get("/admin/banks").then((res) => {
+  const fetchBanks = async () => {
+    try {
+      const res = await apiClient.get("/admin/banks");
       if (res.data.success) {
         setBanks(res.data.data);
-        if (res.data.data.length > 0) setSelectedBankId(res.data.data[0].id);
+        if (res.data.data.length > 0 && !selectedBankId) {
+          setSelectedBankId(res.data.data[0].id);
+        }
       }
-    });
+    } catch (err) {
+      console.error("Failed to fetch banks:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchBanks();
   }, []);
 
   // ── File drag & drop handlers ─────────────────────────────────────────────
@@ -423,9 +432,15 @@ export default function AdminImportPage() {
 
                   {/* Bank selector */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                      <Building2 className="w-3 h-3" />
-                      Target Bank / NBFC *
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="w-3 h-3" />
+                        Target Bank / NBFC *
+                      </div>
+                      <button type="button" onClick={fetchBanks} className="text-royal hover:text-royal-hover flex items-center gap-1">
+                        <RefreshCw className={`w-3 h-3 ${banks.length === 0 ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </button>
                     </label>
                     <select
                       value={selectedBankId}
