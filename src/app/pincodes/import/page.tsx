@@ -253,9 +253,7 @@ export default function AdminImportPage() {
     formData.append("entityType", "PINCODE");
 
     try {
-      const res = await importApiClient.post("/import/analyze?entityType=PINCODE", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await importApiClient.post("/import/analyze?entityType=PINCODE", formData);
 
       if (res.data.success) {
         const result: AnalyzeResponse = res.data.data;
