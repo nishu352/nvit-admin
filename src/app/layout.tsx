@@ -14,7 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NVIT Admin Portal",
+  title: {
+    default: "NVIT.SPACE - Admin Portal",
+    template: "NVIT.SPACE - %s",
+  },
   description: "Enterprise Operations Overview",
 };
 
