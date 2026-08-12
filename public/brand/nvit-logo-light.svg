@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 100" width="450" height="100" fill="none">
+
+  <defs>
+    <linearGradient id="nvitBlue" x1="20" y1="15" x2="80" y2="85" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="nvitSilver" x1="20" y1="20" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F3F4F6"/>
+      <stop offset="1" stop-color="#D1D5DB"/>
+    </linearGradient>
+    <style>
+      .nvit-text {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-size: 68px;
+        letter-spacing: -0.02em;
+      }
+      .nvit-bold { font-weight: 600; }
+      .nvit-light { font-weight: 300; }
+    </style>
+  </defs>
+
+  <path d="M18 18 C18 16.9 18.9 16 20 16 H38 C39.1 16 40 16.9 40 18 V82 C40 83.1 39.1 84 38 84 H20 C18.9 84 18 83.1 18 82 V18Z" fill="url(#nvitSilver)"/>
+  <path d="M20 16 H40 L82 84 H62 L20 30 V16Z" fill="url(#nvitBlue)"/>
+  <path d="M60 16 H80 C81.1 16 82 16.9 82 18 V82 C82 83.1 81.1 84 80 84 H62 C60.9 84 60 83.1 60 82 V54 L60 16Z" fill="url(#nvitSilver)"/>
+  <circle cx="80" cy="16" r="5" fill="#2563EB"/>
+
+  <text x="110" y="75" class="nvit-text" fill="#FFFFFF"><tspan class="nvit-bold">NVIT</tspan><tspan fill="#2563EB">.</tspan><tspan class="nvit-light">SPACE</tspan></text>
+</svg>

@@ -169,3 +169,21 @@ body {
 .role-executive.page-loan-products button.bg-royal {
   display: none !important;
 }
+
+.nvit-logo {
+  transition:
+    opacity 200ms ease,
+    filter 200ms ease;
+}
+
+.nvit-logo:hover {
+  filter: brightness(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nvit-logo,
+  .nvit-logo * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

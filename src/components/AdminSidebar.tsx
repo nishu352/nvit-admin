@@ -218,13 +218,21 @@ export default function AdminSidebar() {
     <aside className="w-64 bg-slate-950 text-slate-300 flex flex-col justify-between h-screen border-r border-slate-900 shrink-0 sticky top-0 overflow-y-auto">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Brand Header */}
-        <div className="p-6 border-b border-slate-900 flex items-center space-x-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-blue-500/20">
-            <Building2 className="w-5 h-5 text-white" />
-          </div>
+        <div className="p-6 border-b border-slate-900 flex items-center space-x-3 shrink-0 select-none">
+          <img
+            src="/brand/nvit-icon-animated.svg"
+            alt="NVIT.SPACE"
+            className="nvit-logo w-9 h-9 shrink-0"
+            width="36"
+            height="36"
+          />
           <div>
-            <h2 className="font-black text-white text-md tracking-tight">NVIT SOLUTION</h2>
-            <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-extrabold block">
+            <h2 className="text-white text-[17px] tracking-tight flex items-center">
+              <span className="font-semibold">NVIT</span>
+              <span className="text-blue-500 font-semibold">.</span>
+              <span className="font-light">SPACE</span>
+            </h2>
+            <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-extrabold block mt-[2px]">
               Enterprise Admin
             </span>
           </div>
