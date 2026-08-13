@@ -555,6 +555,17 @@ export default function AdminImportHistoryPage() {
     fetchHistory(1);
   }, []);
 
+  const handleAbort = async (id: string) => {
+    if (!confirm("Are you sure you want to abort this import? Any progress made so far will remain in the database.")) return;
+    try {
+      await apiClient.post(`/import/${id}/abort`);
+      fetchHistory(page);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to abort import. It may have already finished or failed.");
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
       <AdminSidebar />
@@ -771,6 +782,15 @@ export default function AdminImportHistoryPage() {
                                 <Eye className="w-3 h-3" />
                                 View
                               </button>
+                              {item.status === "PROCESSING" && (
+                                <button
+                                  onClick={() => handleAbort(item.id)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 text-[10px] font-bold border border-rose-800/40 transition-colors cursor-pointer whitespace-nowrap"
+                                >
+                                  <X className="w-3 h-3" />
+                                  Abort
+                                </button>
+                              )}
                               {item.failedRecords > 0 && (
                                 <button
                                   onClick={() => setErrorItem(item)}

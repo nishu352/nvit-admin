@@ -132,6 +132,26 @@ export default function AdminBanksPage() {
     }
   };
 
+  const handleClearCompanies = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to clear all imported company data for ${name}? This action cannot be undone.`)) return;
+    try {
+      await apiClient.delete(`/admin/banks/${id}/data/companies`);
+      fetchBanks();
+    } catch (err) {
+      console.error("Failed to clear company data", err);
+    }
+  };
+
+  const handleClearPincodes = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to clear all imported pincode data for ${name}? This action cannot be undone.`)) return;
+    try {
+      await apiClient.delete(`/admin/banks/${id}/data/pincodes`);
+      fetchBanks();
+    } catch (err) {
+      console.error("Failed to clear pincode data", err);
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
       <AdminSidebar />
@@ -234,6 +254,20 @@ export default function AdminBanksPage() {
                     </button>
 
                     <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleClearCompanies(bank.id, bank.name)}
+                        className="h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-850 hover:border-amber-700 hover:bg-amber-950/20 flex items-center justify-center text-slate-400 hover:text-amber-400 transition-colors cursor-pointer text-[10px] font-bold"
+                        title="Clear Company Data"
+                      >
+                        Clear Companies
+                      </button>
+                      <button
+                        onClick={() => handleClearPincodes(bank.id, bank.name)}
+                        className="h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-850 hover:border-amber-700 hover:bg-amber-950/20 flex items-center justify-center text-slate-400 hover:text-amber-400 transition-colors cursor-pointer text-[10px] font-bold"
+                        title="Clear Pincode Data"
+                      >
+                        Clear Pincodes
+                      </button>
                       <button
                         onClick={() => openEditModal(bank)}
                         className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-850 hover:border-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"

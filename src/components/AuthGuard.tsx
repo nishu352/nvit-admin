@@ -96,7 +96,7 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
 
   // ── Login page — unauthenticated users see the login form ────────────────
   if (pathname === "/") {
-    return <>{children}</>;
+    return <div key={pathname} className="contents">{children}</div>;
   }
 
   // ── Protected page — check role authorization ────────────────────────────
@@ -136,5 +136,5 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <div key={pathname} className="contents">{children}</div>;
 }
