@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   Plus,
@@ -23,8 +23,8 @@ import { AdminCardGridSkeleton } from "@/components/AdminSkeleton";
 import { formatCurrency } from "@/lib/utils";
 
 export default function AdminBanksPage() {
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: banks = [], isLoading: loading, refetch: fetchBanks } = useBanksQuery();
   const [showModal, setShowModal] = useState(false);
   const [editingBank, setEditingBank] = useState<any>(null);
 
@@ -39,23 +39,7 @@ export default function AdminBanksPage() {
   const [eligibility, setEligibility] = useState("");
   const [processingFee, setProcessingFee] = useState(1.0);
 
-  const fetchBanks = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data.success) {
-        setBanks(res.data.data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch banks", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchBanks();
-  }, []);
 
   const openAddModal = () => {
     setEditingBank(null);
@@ -152,13 +136,7 @@ export default function AdminBanksPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -181,7 +159,7 @@ export default function AdminBanksPage() {
             <AdminCardGridSkeleton count={6} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {banks.map((bank) => (
+              {banks.map((bank: any) => (
                 <div key={bank.id} className="glass-card rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between min-h-64">
                   {/* Card Top */}
                   <div className="space-y-4">
@@ -432,7 +410,5 @@ export default function AdminBanksPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }

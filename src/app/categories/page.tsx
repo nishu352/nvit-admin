@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { useCategoriesQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Tag,
   Search,
@@ -19,13 +19,16 @@ import {
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminCategoriesPage() {
-  const [mappings, setMappings] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]);
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+
+  const { data: categoriesData, isLoading: loading, refetch: fetchMappings } = useCategoriesQuery(page, search);
+  const { data: banks = [] } = useBanksQuery();
+  const [companies, setCompanies] = useState<any[]>([]);
+
+  const mappings = categoriesData?.items || [];
+  const totalPages = categoriesData?.totalPages || 1;
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -38,41 +41,7 @@ export default function AdminCategoriesPage() {
   const [status, setStatus] = useState("APPROVED");
   const [remarks, setRemarks] = useState("");
 
-  const fetchMappings = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/categories?page=${page}&limit=20&search=${search}`);
-      if (res.data.success) {
-        setMappings(res.data.data.items);
-        setTotalPages(res.data.data.totalPages);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchAssets = async () => {
-    try {
-      const [banksRes, cosRes] = await Promise.all([
-        apiClient.get("/admin/banks"),
-        apiClient.get("/admin/companies?limit=100"),
-      ]);
-      if (banksRes.data.success) setBanks(banksRes.data.data);
-      if (cosRes.data.success) setCompanies(cosRes.data.data.items);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchMappings();
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchAssets();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,13 +97,7 @@ export default function AdminCategoriesPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -192,7 +155,7 @@ export default function AdminCategoriesPage() {
                         </td>
                       </tr>
                     ) : (
-                      mappings.map((m) => (
+                      mappings.map((m: any) => (
                         <tr key={m.id} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-4.5 px-6 font-black text-white">
                             <div>{m.company.name}</div>
@@ -309,7 +272,7 @@ export default function AdminCategoriesPage() {
                         onChange={(e) => setBankId(e.target.value)}
                         className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 text-white disabled:opacity-50 rounded-xl text-xs font-semibold focus:outline-none"
                       >
-                        {banks.map((b) => (
+                        {banks.map((b: any) => (
                           <option key={b.id} value={b.id}>
                             {b.name} ({b.code})
                           </option>
@@ -382,7 +345,5 @@ export default function AdminCategoriesPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }

@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
-import { apiClient } from "@/services/apiClient";
+import { useDashboardStats } from "@/hooks/useAdminQueries";
 import {
   Building2,
   FileSpreadsheet,
@@ -28,26 +25,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get("/admin/dashboard/stats");
-      if (response.data.success) {
-        setStats(response.data.data);
-      }
-    } catch (err) {
-      console.error("Failed to load dashboard stats", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const { data: stats, isLoading: loading, refetch: fetchStats } = useDashboardStats();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -65,13 +43,7 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Dashboard Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -82,7 +54,7 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-slate-400 font-medium mt-0.5">Credit policy indexes, lead statuses, and system audit trail</p>
             </div>
             <button
-              onClick={fetchStats}
+              onClick={() => fetchStats()}
               className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:border-slate-700 text-xs font-semibold text-slate-200 shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -366,7 +338,7 @@ export default function AdminDashboardPage() {
             <div className="py-20 text-center space-y-4 bg-slate-900/40 border border-slate-800 rounded-3xl p-8 max-w-lg mx-auto">
               <p className="text-sm font-bold text-slate-300">Unable to load live dashboard telemetry.</p>
               <button
-                onClick={fetchStats}
+                onClick={() => fetchStats()}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors"
               >
                 Retry Refreshing Data
@@ -374,7 +346,5 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </main>
-      </div>
-    </div>
   );
 }

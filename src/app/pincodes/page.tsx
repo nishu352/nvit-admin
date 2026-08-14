@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { usePincodesQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MapPin,
   Search,
@@ -19,12 +19,15 @@ import {
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminPincodesPage() {
-  const [pincodes, setPincodes] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+
+  const { data: pincodesData, isLoading: loading, refetch: fetchPincodes } = usePincodesQuery(page, search);
+  const { data: banks = [] } = useBanksQuery();
+
+  const pincodes = pincodesData?.items || [];
+  const totalPages = pincodesData?.totalPages || 1;
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -40,39 +43,7 @@ export default function AdminPincodesPage() {
   const [isNegative, setIsNegative] = useState(false);
   const [category, setCategory] = useState("PREFERRED");
 
-  const fetchPincodes = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/pincodes?page=${page}&limit=20&query=${search}`);
-      if (res.data.success) {
-        setPincodes(res.data.data.items);
-        setTotalPages(res.data.data.totalPages);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchBanks = async () => {
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data.success) {
-        setBanks(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchPincodes();
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchBanks();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,13 +108,7 @@ export default function AdminPincodesPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -203,7 +168,7 @@ export default function AdminPincodesPage() {
                         </td>
                       </tr>
                     ) : (
-                      pincodes.map((p) => (
+                      pincodes.map((p: any) => (
                         <tr key={p.id} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-4.5 px-6 font-black text-white text-sm tracking-wider font-mono">
                             {p.pincode}
@@ -329,7 +294,7 @@ export default function AdminPincodesPage() {
                           onChange={(e) => setBankId(e.target.value)}
                           className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 text-white rounded-xl text-xs font-semibold focus:outline-none"
                         >
-                          {banks.map((b) => (
+                          {banks.map((b: any) => (
                             <option key={b.id} value={b.id}>
                               {b.code}
                             </option>
@@ -439,7 +404,5 @@ export default function AdminPincodesPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }

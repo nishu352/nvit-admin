@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
 import {
   Globe,
@@ -199,13 +197,7 @@ export default function AdminCMSPage() {
   const sectionCls = "bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-800 shadow-sm space-y-6";
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -649,8 +641,6 @@ export default function AdminCMSPage() {
             </div>
           )}
         </main>
-      </div>
-    </div>
   );
 }
 

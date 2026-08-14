@@ -4,6 +4,7 @@ import { useEffect, useState, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ShieldAlert, ArrowLeft, Loader2 } from "lucide-react";
+import AdminLayout from "@/components/AdminLayout";
 
 // Centralized role permissions mapping for client-side pages
 const PAGE_PERMISSIONS: Record<string, string[]> = {
@@ -136,5 +137,5 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  return <div key={pathname} className="contents">{children}</div>;
+  return <AdminLayout>{children}</AdminLayout>;
 }

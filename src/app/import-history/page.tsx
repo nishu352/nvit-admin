@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
 import {
   History,
@@ -567,13 +565,8 @@ export default function AdminImportHistoryPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-6 space-y-6">
+    <>
+      <main className="p-4 sm:p-6 space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between border-b border-slate-900 pb-5">
             <div>
@@ -852,7 +845,6 @@ export default function AdminImportHistoryPage() {
             )}
           </div>
         </main>
-      </div>
 
       {/* Report Modal */}
       {selectedItem && (
@@ -863,6 +855,6 @@ export default function AdminImportHistoryPage() {
       {errorItem && (
         <ImportErrorsModal item={errorItem} onClose={() => setErrorItem(null)} />
       )}
-    </div>
+    </>
   );
 }

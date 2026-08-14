@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { usePoliciesQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FileCheck,
   Plus,
@@ -19,12 +19,15 @@ import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatCurrency } from "@/lib/utils";
 
 export default function AdminPoliciesPage() {
-  const [policies, setPolicies] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [selectedBankId, setSelectedBankId] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+
+  const { data: policiesData, isLoading: loading, refetch: fetchPolicies } = usePoliciesQuery(selectedBankId || undefined, page);
+  const { data: banks = [] } = useBanksQuery();
+
+  const policies: any[] = Array.isArray(policiesData) ? policiesData : policiesData?.items || [];
+  const totalPages: number = Array.isArray(policiesData) ? 1 : policiesData?.totalPages || 1;
 
   // Modals & History Drawer
   const [showModal, setShowModal] = useState(false);
@@ -52,42 +55,6 @@ export default function AdminPoliciesPage() {
   const [employmentType, setEmploymentType] = useState("SALARIED");
   const [requiredDocuments, setRequiredDocuments] = useState("PAN, Aadhaar, 3 Months Payslip");
   const [notes, setNotes] = useState("");
-
-  const fetchPolicies = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(
-        `/admin/policies?page=${page}&limit=10${selectedBankId ? `&bankId=${selectedBankId}` : ""}`
-      );
-      if (res.data.success) {
-        setPolicies(res.data.data.items);
-        setTotalPages(res.data.data.totalPages);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBanks = async () => {
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data.success) {
-        setBanks(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchPolicies();
-  }, [page, selectedBankId]);
-
-  useEffect(() => {
-    fetchBanks();
-  }, []);
 
   const openAddModal = () => {
     setEditingPolicy(null);
@@ -206,13 +173,7 @@ export default function AdminPoliciesPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -243,7 +204,7 @@ export default function AdminPoliciesPage() {
               className="px-4 py-2 bg-slate-900 border border-slate-900 hover:border-slate-800 text-slate-200 rounded-xl text-xs font-semibold focus:outline-none"
             >
               <option value="">All Banks & NBFCs</option>
-              {banks.map((b) => (
+              {banks.map((b: any) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({b.code})
                 </option>
@@ -255,7 +216,7 @@ export default function AdminPoliciesPage() {
             <AdminTableSkeleton rows={6} columns={5} />
           ) : (
             <div className="grid grid-cols-1 gap-6">
-              {policies.map((p) => (
+              {policies.map((p: any) => (
                 <div key={p.id} className="glass-card rounded-2xl p-6 border border-slate-900 flex flex-col justify-between space-y-6">
                   {/* Title Bar */}
                   <div className="flex items-start justify-between border-b border-slate-900 pb-4">
@@ -392,7 +353,7 @@ export default function AdminPoliciesPage() {
                           onChange={(e) => setBankId(e.target.value)}
                           className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 text-white rounded-xl text-xs font-semibold focus:outline-none"
                         >
-                          {banks.map((b) => (
+                          {banks.map((b: any) => (
                             <option key={b.id} value={b.id}>
                               {b.name}
                             </option>
@@ -676,7 +637,5 @@ export default function AdminPoliciesPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }

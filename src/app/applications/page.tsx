@@ -1,46 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import AdminSidebar from "@/components/AdminSidebar";
-import { apiClient } from "@/services/apiClient";
+import { useApplicationsQuery } from "@/hooks/useAdminQueries";
 import { RefreshCw } from "lucide-react";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 export default function AdminApplicationsPage() {
-  const [applications, setApplications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchApplications = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get("/loan/applications");
-      if (res.data.success) {
-        setApplications(res.data.data.items);
-      }
-    } catch (err) {
-      console.error("Failed to fetch applications", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchApplications();
-  }, []);
+  const { data: applications = [], isLoading: loading, refetch: fetchApplications } = useApplicationsQuery();
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <main className="flex-1 p-8 space-y-8 overflow-y-auto">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto">
         <div className="flex items-center justify-between border-b border-slate-900 pb-5">
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight">Loan Lead Inquiries</h1>
             <p className="text-xs text-slate-400 font-medium font-semibold">Review and process submitted loan application leads</p>
           </div>
           <button
-            onClick={fetchApplications}
+            onClick={() => fetchApplications()}
             className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-200 flex items-center gap-2 cursor-pointer transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -72,7 +48,7 @@ export default function AdminApplicationsPage() {
                       </td>
                     </tr>
                   ) : (
-                    applications.map((app) => (
+                    applications.map((app: any) => (
                       <tr key={app.id} className="hover:bg-slate-850/60 bg-slate-900/40 transition-colors">
                         <td className="py-4.5 px-6 font-extrabold text-white">{app.name}</td>
                         <td className="py-4.5 px-6 space-y-1">
@@ -106,6 +82,5 @@ export default function AdminApplicationsPage() {
           </div>
         )}
       </main>
-    </div>
   );
 }

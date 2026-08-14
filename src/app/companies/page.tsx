@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { useCompaniesQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Building,
   Search,
@@ -23,13 +23,16 @@ import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminCompaniesPage() {
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const { data: companiesData, isLoading: loading, refetch: fetchCompanies } = useCompaniesQuery(page, search);
+  const { data: banks = [] } = useBanksQuery();
+
+  const companies = companiesData?.items || [];
+  const totalPages = companiesData?.totalPages || 1;
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,43 +49,6 @@ export default function AdminCompaniesPage() {
   const [bulkCategory, setBulkCategory] = useState("CAT A");
   const [bulkStatus, setBulkStatus] = useState("APPROVED");
   const [bulkRemarks, setBulkRemarks] = useState("");
-
-  const fetchCompanies = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/companies?page=${page}&limit=20&query=${search}`);
-      if (res.data.success) {
-        setCompanies(res.data.data.items);
-        setTotalPages(res.data.data.totalPages);
-      }
-    } catch (err) {
-      console.error("Failed to fetch companies", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBanks = async () => {
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data.success) {
-        setBanks(res.data.data);
-        if (res.data.data.length > 0) {
-          setBulkBankId(res.data.data[0].id);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchCompanies();
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchBanks();
-  }, []);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,13 +121,13 @@ export default function AdminCompaniesPage() {
     if (selectedIds.length === companies.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(companies.map((c) => c.id));
+      setSelectedIds(companies.map((c: any) => c.id));
     }
   };
 
   const handleExportCSV = () => {
     const headers = "Company ID,Company Name,CIN,Bank Mappings\n";
-    const rows = companies.map((c) => {
+    const rows = companies.map((c: any) => {
       const mappingsStr = c.bankCategories
         .map((bc: any) => `${bc.bank.code}: ${bc.category} (${bc.status})`)
         .join(" | ");
@@ -176,13 +142,7 @@ export default function AdminCompaniesPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -284,7 +244,7 @@ export default function AdminCompaniesPage() {
                         </td>
                       </tr>
                     ) : (
-                      companies.map((c) => (
+                      companies.map((c: any) => (
                         <tr key={c.id} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-4.5 px-6">
                             <button onClick={() => toggleSelect(c.id)} className="text-slate-400 hover:text-white cursor-pointer">
@@ -509,7 +469,7 @@ export default function AdminCompaniesPage() {
                         onChange={(e) => setBulkBankId(e.target.value)}
                         className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 text-white rounded-xl text-xs font-semibold focus:outline-none"
                       >
-                        {banks.map((b) => (
+                        {banks.map((b: any) => (
                           <option key={b.id} value={b.id}>
                             {b.name} ({b.code})
                           </option>
@@ -579,8 +539,6 @@ export default function AdminCompaniesPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }
 

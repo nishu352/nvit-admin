@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { useCrmLeadsQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Users,
   Search,
@@ -37,30 +37,13 @@ const CRM_STAGES = [
 ];
 
 export default function AdminCRMLeadsPage() {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [newNote, setNewNote] = useState("");
   const [statusUpdateRemark, setStatusUpdateRemark] = useState("");
 
-  const fetchLeads = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/crm/leads${search ? `?query=${search}` : ""}`);
-      if (res.data.success) {
-        setLeads(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLeads();
-  }, [search]);
+  const { data: leads = [], isLoading: loading, refetch: fetchLeads } = useCrmLeadsQuery(search || undefined);
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     try {
@@ -95,13 +78,7 @@ export default function AdminCRMLeadsPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8 flex flex-col">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8 flex flex-col">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -139,7 +116,7 @@ export default function AdminCRMLeadsPage() {
           ) : (
             <div className="flex-1 flex space-x-4 overflow-x-auto pb-6">
               {CRM_STAGES.map((stage) => {
-                const stageLeads = leads.filter((l) => l.status === stage.id);
+                const stageLeads = leads.filter((l: any) => l.status === stage.id);
                 return (
                   <div key={stage.id} className="w-72 shrink-0 flex flex-col bg-slate-900/60 rounded-2xl border border-slate-850 p-4 space-y-3">
                     {/* Stage Header */}
@@ -160,7 +137,7 @@ export default function AdminCRMLeadsPage() {
                           No leads in stage
                         </div>
                       ) : (
-                        stageLeads.map((lead) => (
+                        stageLeads.map((lead: any) => (
                           <div
                             key={lead.id}
                             onClick={() => setSelectedLead(lead)}
@@ -330,7 +307,5 @@ export default function AdminCRMLeadsPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }

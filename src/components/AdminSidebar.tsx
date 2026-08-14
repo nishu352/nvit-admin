@@ -11,54 +11,23 @@ import {
   FolderTree,
   MapPin,
   Package,
-  Percent,
   FileSpreadsheet,
-  Users,
   UploadCloud,
   History,
-  Download,
-  Save,
-  FileText,
   GitPullRequest,
   UserCheck,
   UserSquare2,
-  CheckSquare,
-  CalendarClock,
   Globe,
-  Settings2,
   Layout,
-  Info,
-  Briefcase,
-  MessageSquare,
-  HelpCircle,
-  Phone,
-  AlignJustify,
-  Palette,
-  Search,
   Megaphone,
   Target,
-  BarChart3,
-  Tag,
-  Eye,
-  Activity,
-  Compass,
-  Share2,
   Shield,
   User,
-  Key,
-  FileSearch,
   ShieldAlert,
-  Monitor,
-  KeyRound,
-  Settings,
-  Mail,
-  MessageCircle,
-  HardDrive,
-  AlertTriangle,
-  SlidersHorizontal,
   ChevronDown,
   ChevronRight,
   LogOut,
+  X,
 } from "lucide-react";
 
 interface SidebarItem {
@@ -74,7 +43,12 @@ interface SidebarSection {
   items: SidebarItem[];
 }
 
-export default function AdminSidebar() {
+interface AdminSidebarProps {
+  isMobile?: boolean;
+  onClose?: () => void;
+}
+
+export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -201,7 +175,7 @@ export default function AdminSidebar() {
     );
     if (activeSection) {
       setExpandedSections((prev) => {
-        if (prev[activeSection.id]) return prev; // Avoid redundant updates
+        if (prev[activeSection.id]) return prev;
         return { ...prev, [activeSection.id]: true };
       });
     }
@@ -214,36 +188,55 @@ export default function AdminSidebar() {
     }));
   };
 
+  const handleLinkClick = () => {
+    if (isMobile && onClose) {
+      onClose();
+    }
+  };
+
   return (
-    <aside className="w-64 bg-slate-950 text-slate-300 flex flex-col justify-between h-screen border-r border-slate-900 shrink-0 sticky top-0 overflow-y-auto">
+    <aside className="w-full h-full bg-slate-950 text-slate-300 flex flex-col justify-between border-r border-slate-900 overflow-y-auto">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Brand Header */}
-        <div className="p-6 border-b border-slate-900 flex items-center space-x-3 shrink-0 select-none">
-          <img
-            src="/brand/nvit-icon-animated.svg"
-            alt="NVIT.SPACE"
-            className="nvit-logo w-9 h-9 shrink-0"
-            width="36"
-            height="36"
-          />
-          <div>
-            <h2 className="text-white text-[17px] tracking-tight flex items-center">
-              <span className="font-semibold">NVIT</span>
-              <span className="text-blue-500 font-semibold">.</span>
-              <span className="font-light">SPACE</span>
-            </h2>
-            <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-extrabold block mt-[2px]">
-              Enterprise Admin
-            </span>
+        <div className="p-5 sm:p-6 border-b border-slate-900 flex items-center justify-between shrink-0 select-none">
+          <div className="flex items-center space-x-3">
+            <img
+              src="/brand/nvit-icon-animated.svg"
+              alt="NVIT.SPACE"
+              className="nvit-logo w-8 h-8 sm:w-9 sm:h-9 shrink-0"
+              width="36"
+              height="36"
+            />
+            <div>
+              <h2 className="text-white text-[16px] sm:text-[17px] tracking-tight flex items-center">
+                <span className="font-semibold">NVIT</span>
+                <span className="text-blue-500 font-semibold">.</span>
+                <span className="font-light">SPACE</span>
+              </h2>
+              <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-bold block mt-[2px]">
+                Enterprise Admin
+              </span>
+            </div>
           </div>
+
+          {/* Close button on mobile */}
+          {isMobile && onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800 transition-colors"
+              aria-label="Close navigation"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* User Card */}
-        <div className="p-4 mx-3 my-4 rounded-2xl bg-slate-900/50 border border-slate-900 flex items-center space-x-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs border border-blue-500/20">
+        <div className="p-3.5 mx-3 my-3 rounded-2xl bg-slate-900/50 border border-slate-900 flex items-center space-x-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs border border-blue-500/20 shrink-0">
             {user?.name ? user.name.charAt(0) : "A"}
           </div>
-          <div className="truncate">
+          <div className="truncate min-w-0">
             <h4 className="text-xs font-bold text-white truncate">{user?.name || "Admin User"}</h4>
             <span className="text-[9px] text-slate-400 font-semibold uppercase">{user?.role || "SUPER_ADMIN"}</span>
           </div>
@@ -254,13 +247,14 @@ export default function AdminSidebar() {
           {/* Main Dashboard Link */}
           <Link
             href="/dashboard"
-            className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            onClick={handleLinkClick}
+            className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               pathname === "/dashboard"
                 ? "bg-royal text-white shadow-md shadow-royal/20"
                 : "text-slate-400 hover:text-white hover:bg-slate-900/60"
             }`}
           >
-            <LayoutDashboard className="w-4 h-4" />
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span>Dashboard</span>
           </Link>
 
@@ -275,7 +269,7 @@ export default function AdminSidebar() {
                 {/* Header button */}
                 <button
                   onClick={() => toggleSection(section.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                     isSubitemActive
                       ? "text-blue-400 bg-slate-900/20"
                       : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/40"
@@ -286,9 +280,9 @@ export default function AdminSidebar() {
                     <span>{section.title}</span>
                   </div>
                   {expanded ? (
-                    <ChevronDown className="w-3 h-3 text-slate-500" />
+                    <ChevronDown className="w-3 h-3 text-slate-500 shrink-0" />
                   ) : (
-                    <ChevronRight className="w-3 h-3 text-slate-500" />
+                    <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
                   )}
                 </button>
 
@@ -302,13 +296,14 @@ export default function AdminSidebar() {
                         <Link
                           key={item.name}
                           href={item.href}
-                          className={`flex items-center space-x-2.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          onClick={handleLinkClick}
+                          className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                             active
                               ? "text-blue-400 bg-slate-900 font-bold border-r-2 border-blue-500"
                               : "text-slate-400 hover:text-white hover:bg-slate-900/40"
                           }`}
                         >
-                          <ItemIcon className="w-3.5 h-3.5" />
+                          <ItemIcon className="w-3.5 h-3.5 shrink-0" />
                           <span>{item.name}</span>
                         </Link>
                       );
@@ -322,12 +317,12 @@ export default function AdminSidebar() {
       </div>
 
       {/* Footer logout button */}
-      <div className="p-4 border-t border-slate-900 shrink-0">
+      <div className="p-3.5 border-t border-slate-900 shrink-0">
         <button
           onClick={logout}
           className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-slate-900/60 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-900 hover:border-rose-950 text-xs font-bold transition-all cursor-pointer"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-4 h-4 shrink-0" />
           <span>Sign Out</span>
         </button>
       </div>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminSidebar from "@/components/AdminSidebar";
-import AdminHeader from "@/components/AdminHeader";
 import { apiClient } from "@/services/apiClient";
+import { useLoanProductsQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Briefcase,
   Plus,
@@ -20,10 +20,11 @@ import {
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminLoanProductsPage() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [selectedBankId, setSelectedBankId] = useState("");
+
+  const { data: products = [], isLoading: loading, refetch: fetchProducts } = useLoanProductsQuery(selectedBankId || undefined);
+  const { data: banks = [] } = useBanksQuery();
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -38,38 +39,7 @@ export default function AdminLoanProductsPage() {
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/products${selectedBankId ? `?bankId=${selectedBankId}` : ""}`);
-      if (res.data.success) {
-        setProducts(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchBanks = async () => {
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data.success) {
-        setBanks(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, [selectedBankId]);
-
-  useEffect(() => {
-    fetchBanks();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,13 +101,7 @@ export default function AdminLoanProductsPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
-      <AdminSidebar />
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        <AdminHeader />
-
-        <main className="flex-1 p-8 space-y-8">
+    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
@@ -165,7 +129,7 @@ export default function AdminLoanProductsPage() {
               className="px-4 py-2 bg-slate-900 border border-slate-900 hover:border-slate-800 text-slate-200 rounded-xl text-xs font-semibold focus:outline-none"
             >
               <option value="">All Banks & NBFCs</option>
-              {banks.map((b) => (
+              {banks.map((b: any) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({b.code})
                 </option>
@@ -198,7 +162,7 @@ export default function AdminLoanProductsPage() {
                         </td>
                       </tr>
                     ) : (
-                      products.map((p) => (
+                      products.map((p: any) => (
                         <tr key={p.id} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-4.5 px-6 font-black text-white">{p.name}</td>
                           <td className="py-4.5 px-6 font-mono text-[10px] text-indigo-400 uppercase tracking-wider">{p.code}</td>
@@ -266,7 +230,7 @@ export default function AdminLoanProductsPage() {
                         onChange={(e) => setBankId(e.target.value)}
                         className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 text-white rounded-xl text-xs font-semibold focus:outline-none"
                       >
-                        {banks.map((b) => (
+                        {banks.map((b: any) => (
                           <option key={b.id} value={b.id}>
                             {b.name}
                           </option>
@@ -376,7 +340,5 @@ export default function AdminLoanProductsPage() {
             )}
           </AnimatePresence>
         </main>
-      </div>
-    </div>
   );
 }
