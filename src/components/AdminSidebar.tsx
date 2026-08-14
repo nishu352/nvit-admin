@@ -195,10 +195,10 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
   };
 
   return (
-    <aside className="w-full h-full bg-slate-950 text-slate-300 flex flex-col justify-between border-r border-slate-900 overflow-y-auto">
+    <aside className="w-full h-full bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 flex flex-col justify-between border-r border-slate-200 dark:border-slate-900 overflow-y-auto">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Brand Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-900 flex items-center justify-between shrink-0 select-none">
+        <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-900 flex items-center justify-between shrink-0 select-none">
           <div className="flex items-center space-x-3">
             <img
               src="/brand/nvit-icon-animated.svg"
@@ -208,12 +208,12 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
               height="36"
             />
             <div>
-              <h2 className="text-white text-[16px] sm:text-[17px] tracking-tight flex items-center">
+              <h2 className="text-slate-900 dark:text-white text-[16px] sm:text-[17px] tracking-tight flex items-center">
                 <span className="font-semibold">NVIT</span>
-                <span className="text-blue-500 font-semibold">.</span>
+                <span className="text-blue-600 dark:text-blue-500 font-semibold">.</span>
                 <span className="font-light">SPACE</span>
               </h2>
-              <span className="text-[9px] uppercase tracking-widest text-emerald-400 font-bold block mt-[2px]">
+              <span className="text-[9px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold block mt-[2px]">
                 Enterprise Admin
               </span>
             </div>
@@ -223,7 +223,7 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
           {isMobile && onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors"
               aria-label="Close navigation"
             >
               <X className="w-5 h-5" />
@@ -232,13 +232,13 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
         </div>
 
         {/* User Card */}
-        <div className="p-3.5 mx-3 my-3 rounded-2xl bg-slate-900/50 border border-slate-900 flex items-center space-x-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs border border-blue-500/20 shrink-0">
+        <div className="p-3.5 mx-3 my-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-900 flex items-center space-x-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs border border-blue-500/20 shrink-0">
             {user?.name ? user.name.charAt(0) : "A"}
           </div>
           <div className="truncate min-w-0">
-            <h4 className="text-xs font-bold text-white truncate">{user?.name || "Admin User"}</h4>
-            <span className="text-[9px] text-slate-400 font-semibold uppercase">{user?.role || "SUPER_ADMIN"}</span>
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || "Admin User"}</h4>
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">{user?.role || "SUPER_ADMIN"}</span>
           </div>
         </div>
 
@@ -251,7 +251,7 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
             className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               pathname === "/dashboard"
                 ? "bg-royal text-white shadow-md shadow-royal/20"
-                : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
             }`}
           >
             <LayoutDashboard className="w-4 h-4 shrink-0" />
@@ -271,8 +271,8 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
                   onClick={() => toggleSection(section.id)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                     isSubitemActive
-                      ? "text-blue-400 bg-slate-900/20"
-                      : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/40"
+                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-slate-900/20"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900/40"
                   }`}
                 >
                   <div className="flex items-center space-x-2">
@@ -280,15 +280,15 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
                     <span>{section.title}</span>
                   </div>
                   {expanded ? (
-                    <ChevronDown className="w-3 h-3 text-slate-500 shrink-0" />
+                    <ChevronDown className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                   ) : (
-                    <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
+                    <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                   )}
                 </button>
 
                 {/* Sub items collapsible list */}
                 {expanded && (
-                  <div className="pl-3 space-y-0.5 border-l border-slate-900 ml-5 my-0.5 animate-slow-fade">
+                  <div className="pl-3 space-y-0.5 border-l border-slate-200 dark:border-slate-900 ml-5 my-0.5 animate-slow-fade">
                     {section.items.map((item) => {
                       const ItemIcon = item.icon;
                       const active = pathname === item.href;
@@ -299,8 +299,8 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
                           onClick={handleLinkClick}
                           className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                             active
-                              ? "text-blue-400 bg-slate-900 font-bold border-r-2 border-blue-500"
-                              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+                              ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-900 font-bold border-r-2 border-blue-600 dark:border-blue-500"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/40"
                           }`}
                         >
                           <ItemIcon className="w-3.5 h-3.5 shrink-0" />
@@ -317,10 +317,10 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
       </div>
 
       {/* Footer logout button */}
-      <div className="p-3.5 border-t border-slate-900 shrink-0">
+      <div className="p-3.5 border-t border-slate-200 dark:border-slate-900 shrink-0">
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-slate-900/60 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-900 hover:border-rose-950 text-xs font-bold transition-all cursor-pointer"
+          className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-900 hover:border-rose-200 dark:hover:border-rose-950 text-xs font-bold transition-all cursor-pointer"
         >
           <LogOut className="w-4 h-4 shrink-0" />
           <span>Sign Out</span>

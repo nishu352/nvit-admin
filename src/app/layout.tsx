@@ -23,6 +23,7 @@ export const metadata: Metadata = {
 
 import AuthGuard from "@/components/AuthGuard";
 import QueryProvider from "@/providers/QueryProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -31,10 +32,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <QueryProvider>
-          <AuthGuard>{children}</AuthGuard>
-        </QueryProvider>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('admin_theme') || 'system';
+                const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100" suppressHydrationWarning>
+        <ThemeProvider>
+          <QueryProvider>
+            <AuthGuard>{children}</AuthGuard>
+          </QueryProvider>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

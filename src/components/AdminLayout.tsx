@@ -39,7 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, [mobileMenuOpen]);
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
+    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-royal selection:text-white">
       {/* Desktop Persistent Sidebar */}
       <div className="hidden md:flex shrink-0">
         <AdminSidebar />

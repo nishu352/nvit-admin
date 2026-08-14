@@ -5,7 +5,7 @@ import React from "react";
 export function Skeleton({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`animate-pulse rounded-lg bg-slate-800/60 ${className}`}
+      className={`animate-pulse rounded-lg bg-slate-200/80 dark:bg-slate-800/60 ${className}`}
       {...props}
     />
   );
@@ -13,9 +13,9 @@ export function Skeleton({ className = "", ...props }: React.HTMLAttributes<HTML
 
 export function AdminStatsSkeleton() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div key={i} className="glass-card p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <Skeleton className="w-24 h-3" />
             <Skeleton className="w-8 h-8 rounded-xl" />
@@ -40,18 +40,18 @@ export function AdminTableSkeleton({
   showHeader?: boolean;
 }) {
   return (
-    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+    <div className="bg-white dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl overflow-hidden">
       {showHeader && (
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <Skeleton className="w-48 h-4" />
           <Skeleton className="w-28 h-8 rounded-xl" />
         </div>
       )}
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 overflow-x-auto">
         {Array.from({ length: rows }).map((_, r) => (
           <div
             key={r}
-            className="flex items-center justify-between py-3 px-2 border-b border-slate-800/60 last:border-0 gap-4"
+            className="flex items-center justify-between py-3 px-2 border-b border-slate-100 dark:border-slate-800/60 last:border-0 gap-4"
           >
             {Array.from({ length: columns }).map((_, c) => (
               <Skeleton
@@ -68,9 +68,9 @@ export function AdminTableSkeleton({
 
 export function AdminCardGridSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4 min-h-56">
+        <div key={i} className="glass-card rounded-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4 min-h-56">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-3">
               <Skeleton className="w-10 h-10 rounded-xl" />
@@ -86,7 +86,7 @@ export function AdminCardGridSkeleton({ count = 6 }: { count?: number }) {
             <Skeleton className="w-3/4 h-3" />
             <Skeleton className="w-1/2 h-3" />
           </div>
-          <div className="pt-4 border-t border-slate-800/60 flex justify-between">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/60 flex justify-between">
             <Skeleton className="w-16 h-4" />
             <Skeleton className="w-12 h-6 rounded-lg" />
           </div>
@@ -98,8 +98,8 @@ export function AdminCardGridSkeleton({ count = 6 }: { count?: number }) {
 
 export function AdminFormSkeleton() {
   return (
-    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-8 space-y-6 max-w-4xl">
-      <div className="space-y-2 border-b border-slate-800 pb-4">
+    <div className="bg-white dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 max-w-4xl shadow-sm dark:shadow-xl">
+      <div className="space-y-2 border-b border-slate-200 dark:border-slate-800 pb-4">
         <Skeleton className="w-48 h-5" />
         <Skeleton className="w-72 h-3" />
       </div>

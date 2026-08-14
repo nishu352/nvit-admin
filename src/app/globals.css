@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme {
   --color-royal: #1d4ed8;
   --color-royal-hover: #1e40af;
@@ -10,77 +12,119 @@
 }
 
 :root {
-  --background: #040914;
-  --foreground: #f8fafc;
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-card: rgba(255, 255, 255, 0.95);
+  --bg-input: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border-default: #e2e8f0;
+  --border-subtle: #f1f5f9;
+}
+
+.dark {
+  --bg-base: #040914;
+  --bg-surface: #0b1329;
+  --bg-subtle: #0f172a;
+  --bg-card: rgba(15, 23, 42, 0.85);
+  --bg-input: #040914;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-default: #1e293b;
+  --border-subtle: #0f172a;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Enterprise Panel Styles */
+/* Enterprise Panel & Card Styles */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: #e2e8f0;
+}
+
+.dark .glass-panel {
+  background: rgba(4, 9, 20, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: #1e293b;
 }
 
 .glass-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.dark .glass-card {
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
 .glass-card:hover {
-  background: rgba(15, 23, 42, 0.9);
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: rgba(37, 99, 235, 0.4);
 }
 
-/* Custom Scrollbar for Enterprise Grid Views */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #040914;
+  background: var(--bg-base);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 6px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+}
+
 ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
 
 /* Custom Table Layouts */
 .enterprise-table th {
-  letter-spacing: 0.075em;
-  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-weight: 700;
 }
 
 .enterprise-table tr {
-  transition: background-color 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
 /* Animation Timings */
 .animate-slow-fade {
-  animation: fadeIn 0.5s ease-out forwards;
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(3px);
   }
   to {
     opacity: 1;

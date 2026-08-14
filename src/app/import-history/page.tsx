@@ -567,284 +567,284 @@ export default function AdminImportHistoryPage() {
   return (
     <>
       <main className="p-4 sm:p-6 space-y-6">
-          {/* Page Header */}
-          <div className="flex items-center justify-between border-b border-slate-900 pb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-                  <History className="w-4 h-4 text-white" />
-                </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Import History</h1>
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-900 pb-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-xs">
+                <History className="w-4 h-4 text-white" />
               </div>
-              <p className="text-xs text-slate-400 font-medium ml-10 mt-0.5">
-                Full audit trail of all bank/NBFC company list imports — read-only
-              </p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Import History</h1>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 font-semibold">{total.toLocaleString()} total imports</span>
-              <button
-                onClick={() => fetchHistory(page)}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold ml-10 mt-0.5">
+              Full audit trail of all bank/NBFC company list imports — read-only
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500 font-semibold">{total.toLocaleString()} total imports</span>
+            <button
+              onClick={() => fetchHistory(page)}
+              className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            <a
+              href="/import"
+              className="px-4 py-2 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-black transition-colors flex items-center gap-1.5 shadow-md shadow-royal/20"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              New Import
+            </a>
+          </div>
+        </div>
+
+        {/* Summary stats */}
+        {!loading && history.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              {
+                label: "Total Imports",
+                value: total,
+                icon: <History className="w-4 h-4 text-purple-600 dark:text-purple-400" />,
+              },
+              {
+                label: "Completed",
+                value: history.filter((h) => h.status === "COMPLETED").length,
+                icon: <BadgeCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />,
+              },
+              {
+                label: "Processing",
+                value: history.filter((h) => h.status === "PROCESSING").length,
+                icon: <Loader2 className="w-4 h-4 text-amber-500 dark:text-amber-400" />,
+              },
+              {
+                label: "Failed",
+                value: history.filter((h) => h.status === "FAILED").length,
+                icon: <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />,
+              },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-xl flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                  {stat.icon}
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white">{stat.value}</p>
+                  <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl overflow-hidden">
+          {loading ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <p className="text-xs font-bold">Loading import history…</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
+              <History className="w-12 h-12 text-slate-400 dark:text-slate-700" />
+              <p className="text-sm font-black text-slate-900 dark:text-white">No imports recorded yet</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-600">
+                Complete your first import to see it here
+              </p>
               <a
                 href="/import"
-                className="px-4 py-2 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-black transition-colors flex items-center gap-1.5"
+                className="mt-2 px-4 py-2 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-black transition-colors"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                New Import
+                Start First Import
               </a>
             </div>
-          </div>
-
-          {/* Summary stats */}
-          {!loading && history.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                {
-                  label: "Total Imports",
-                  value: total,
-                  icon: <History className="w-4 h-4 text-purple-400" />,
-                },
-                {
-                  label: "Completed",
-                  value: history.filter((h) => h.status === "COMPLETED").length,
-                  icon: <BadgeCheck className="w-4 h-4 text-emerald-400" />,
-                },
-                {
-                  label: "Processing",
-                  value: history.filter((h) => h.status === "PROCESSING").length,
-                  icon: <Loader2 className="w-4 h-4 text-amber-400" />,
-                },
-                {
-                  label: "Failed",
-                  value: history.filter((h) => h.status === "FAILED").length,
-                  icon: <AlertCircle className="w-4 h-4 text-rose-400" />,
-                },
-              ].map((stat) => (
-                <div key={stat.label} className="bg-slate-900 rounded-2xl p-4 border border-slate-800 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center shrink-0">
-                    {stat.icon}
-                  </div>
-                  <div>
-                    <p className="text-lg font-black text-white">{stat.value}</p>
-                    <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Table */}
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-            {loading ? (
-              <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin" />
-                <p className="text-xs font-bold">Loading import history…</p>
-              </div>
-            ) : history.length === 0 ? (
-              <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
-                <History className="w-12 h-12 text-slate-700" />
-                <p className="text-sm font-black">No imports recorded yet</p>
-                <p className="text-xs font-medium text-slate-600">
-                  Complete your first import to see it here
-                </p>
-                <a
-                  href="/import"
-                  className="mt-2 px-4 py-2 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-black transition-colors"
-                >
-                  Start First Import
-                </a>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse enterprise-table">
-                    <thead>
-                      <tr className="bg-slate-950 border-b border-slate-800">
-                        {[
-                          "Date & Time",
-                          "File",
-                          "Bank / NBFC",
-                          "Admin",
-                          "Mode",
-                          "Total",
-                          "Imported",
-                          "Skipped",
-                          "Failed",
-                          "Status",
-                          "Report",
-                        ].map((col) => (
-                          <th
-                            key={col}
-                            className="py-3.5 px-4 text-[9px] font-black text-slate-500 uppercase tracking-wider whitespace-nowrap"
-                          >
-                            {col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-900">
-                      {history.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-800/40 transition-colors group"
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[850px] enterprise-table">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+                      {[
+                        "Date & Time",
+                        "File",
+                        "Bank / NBFC",
+                        "Admin",
+                        "Mode",
+                        "Total",
+                        "Imported",
+                        "Skipped",
+                        "Failed",
+                        "Status",
+                        "Report",
+                      ].map((col) => (
+                        <th
+                          key={col}
+                          className="py-3.5 px-4 text-[9px] font-black text-slate-500 uppercase tracking-wider whitespace-nowrap"
                         >
-                          {/* Date */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3 h-3 text-slate-600 shrink-0" />
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-300">
-                                  {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                </p>
-                                <p className="text-[9px] text-slate-600 font-mono">
-                                  {new Date(item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* File */}
-                          <td className="py-3.5 px-4 max-w-[180px]">
-                            <div className="flex items-center gap-1.5">
-                              <FileSpreadsheet className="w-3 h-3 text-blue-500 shrink-0" />
-                              <span
-                                className="text-[10px] font-bold text-slate-200 truncate"
-                                title={item.fileName}
-                              >
-                                {item.fileName}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Bank */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-200">{item.bankName}</p>
-                                <p className="text-[9px] text-slate-600 font-semibold">{item.bankCode} · {item.bankType}</p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Admin */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <User className="w-3 h-3 text-slate-600 shrink-0" />
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-300">{item.createdByName}</p>
-                                <p className="text-[9px] text-slate-600 font-medium truncate max-w-[120px]">{item.createdByEmail}</p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Mode */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <ModeBadge mode={item.importType} />
-                          </td>
-
-                          {/* Stats */}
-                          <td className="py-3.5 px-4 text-[10px] font-bold text-white whitespace-nowrap">
-                            {item.totalRecords?.toLocaleString() ?? 0}
-                          </td>
-                          <td className="py-3.5 px-4 text-[10px] font-bold text-emerald-400 whitespace-nowrap">
-                            {item.processedRecords?.toLocaleString() ?? 0}
-                          </td>
-                          <td className="py-3.5 px-4 text-[10px] font-bold text-amber-400 whitespace-nowrap">
-                            {item.skippedRecords?.toLocaleString() ?? 0}
-                          </td>
-                          <td className="py-3.5 px-4 text-[10px] font-bold text-rose-400 whitespace-nowrap">
-                            {item.failedRecords?.toLocaleString() ?? 0}
-                          </td>
-
-                          {/* Status */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <StatusBadge status={item.status} />
-                          </td>
-
-                          {/* Report */}
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => setSelectedItem(item)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                <Eye className="w-3 h-3" />
-                                View
-                              </button>
-                              {item.status === "PROCESSING" && (
-                                <button
-                                  onClick={() => handleAbort(item.id)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 text-[10px] font-bold border border-rose-800/40 transition-colors cursor-pointer whitespace-nowrap"
-                                >
-                                  <X className="w-3 h-3" />
-                                  Abort
-                                </button>
-                              )}
-                              {item.failedRecords > 0 && (
-                                <button
-                                  onClick={() => setErrorItem(item)}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 text-[10px] font-bold border border-rose-800/40 transition-colors cursor-pointer whitespace-nowrap"
-                                >
-                                  <AlertTriangle className="w-3 h-3" />
-                                  {item.failedRecords.toLocaleString()} Errors
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
+                          {col}
+                        </th>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
+                    {history.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+                      >
+                        {/* Date */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-600 shrink-0" />
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-800 dark:text-slate-300">
+                                {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                              </p>
+                              <p className="text-[9px] text-slate-500 dark:text-slate-600 font-mono">
+                                {new Date(item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-800 bg-slate-950/40">
-                    <p className="text-[10px] text-slate-500 font-semibold">
-                      Page {page} of {totalPages} · {total} records
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => fetchHistory(page - 1)}
-                        disabled={page <= 1}
-                        className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-                        return (
-                          <button
-                            key={p}
-                            onClick={() => fetchHistory(p)}
-                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-colors cursor-pointer ${
-                              p === page
-                                ? "bg-royal text-white"
-                                : "bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        );
-                      })}
-                      <button
-                        onClick={() => fetchHistory(page + 1)}
-                        disabled={page >= totalPages}
-                        className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                        {/* File */}
+                        <td className="py-3.5 px-4 max-w-[180px]">
+                          <div className="flex items-center gap-1.5">
+                            <FileSpreadsheet className="w-3 h-3 text-blue-500 shrink-0" />
+                            <span
+                              className="text-[10px] font-bold text-slate-900 dark:text-slate-200 truncate"
+                              title={item.fileName}
+                            >
+                              {item.fileName}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Bank */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-900 dark:text-slate-200">{item.bankName}</p>
+                              <p className="text-[9px] text-slate-500 dark:text-slate-600 font-semibold">{item.bankCode} · {item.bankType}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Admin */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-3 h-3 text-slate-400 dark:text-slate-600 shrink-0" />
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-800 dark:text-slate-300">{item.createdByName}</p>
+                              <p className="text-[9px] text-slate-500 dark:text-slate-600 font-medium truncate max-w-[120px]">{item.createdByEmail}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Mode */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <ModeBadge mode={item.importType} />
+                        </td>
+
+                        {/* Stats */}
+                        <td className="py-3.5 px-4 text-[10px] font-bold text-slate-900 dark:text-white whitespace-nowrap font-mono">
+                          {item.totalRecords?.toLocaleString() ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap font-mono">
+                          {item.processedRecords?.toLocaleString() ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-[10px] font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap font-mono">
+                          {item.skippedRecords?.toLocaleString() ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-[10px] font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap font-mono">
+                          {item.failedRecords?.toLocaleString() ?? 0}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <StatusBadge status={item.status} />
+                        </td>
+
+                        {/* Report */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setSelectedItem(item)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View
+                            </button>
+                            {item.status === "PROCESSING" && (
+                              <button
+                                onClick={() => handleAbort(item.id)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 text-[10px] font-bold border border-rose-200 dark:border-rose-800/40 transition-colors cursor-pointer whitespace-nowrap"
+                              >
+                                <X className="w-3 h-3" />
+                                Abort
+                              </button>
+                            )}
+                            {item.failedRecords > 0 && (
+                              <button
+                                onClick={() => setErrorItem(item)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 text-[10px] font-bold border border-rose-200 dark:border-rose-800/40 transition-colors cursor-pointer whitespace-nowrap"
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                {item.failedRecords.toLocaleString()} Errors
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40">
+                  <p className="text-[10px] text-slate-500 font-semibold">
+                    Page {page} of {totalPages} · {total} records
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => fetchHistory(page - 1)}
+                      disabled={page <= 1}
+                      className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-transparent hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => fetchHistory(p)}
+                          className={`w-8 h-8 rounded-lg text-[10px] font-black transition-colors cursor-pointer ${
+                            p === page
+                              ? "bg-royal text-white"
+                              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-transparent hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => fetchHistory(page + 1)}
+                      disabled={page >= totalPages}
+                      className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-transparent hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
-                )}
-              </>
-            )}
-          </div>
-        </main>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </main>
 
       {/* Report Modal */}
       {selectedItem && (
