@@ -12,14 +12,15 @@ import {
   Layout,
   Type,
   Palette,
-  Sparkles,
   Building2,
   Users,
   MapPin,
   Phone,
   Mail,
   FileText,
+  History,
 } from "lucide-react";
+import { AdminFormSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminCMSPage() {
   const [loading, setLoading] = useState(true);
@@ -194,8 +195,8 @@ export default function AdminCMSPage() {
   };
 
   const inputCls = "w-full px-4 py-2.5 bg-slate-950 border border-slate-800 text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 placeholder:text-slate-600 transition-colors";
-  const labelCls = "text-[10px] font-black uppercase text-slate-400 tracking-wider";
-  const sectionCls = "bg-slate-900 rounded-3xl p-8 border border-slate-800 shadow-2xl space-y-6";
+  const labelCls = "text-[10px] font-bold uppercase text-slate-400 tracking-wider";
+  const sectionCls = "bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-800 shadow-sm space-y-6";
 
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100 selection:bg-royal selection:text-white">
@@ -254,10 +255,7 @@ export default function AdminCMSPage() {
           )}
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading CMS configurations...</p>
-            </div>
+            <AdminFormSkeleton />
           ) : (
             <div className="space-y-8">
               <form id="cms-form" onSubmit={handleSaveDraft} className="space-y-8">
@@ -603,8 +601,8 @@ export default function AdminCMSPage() {
               {/* ── Version History ──────────────────────────────────────── */}
               <div className={sectionCls}>
                 <div className="flex items-center space-x-2 border-b border-slate-800 pb-4">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <h2 className="text-sm font-black text-white uppercase tracking-wider">CMS Publication Version History</h2>
+                  <History className="w-5 h-5 text-blue-400" />
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">CMS Publication Version History</h2>
                 </div>
 
                 <div className="overflow-x-auto">

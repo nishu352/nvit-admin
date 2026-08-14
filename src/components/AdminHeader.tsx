@@ -141,21 +141,20 @@ export default function AdminHeader() {
         {/* Right Actions */}
         <div className="flex items-center space-x-6">
           {/* Health Indicator */}
-          <div className="flex items-center space-x-2 bg-slate-900/30 px-3.5 py-1.5 rounded-xl border border-slate-900">
-            <Activity className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <span className="text-[10px] font-bold text-slate-400">Gateway:</span>
+          <div className="flex items-center space-x-2 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+            <span className="text-[11px] font-medium text-slate-400">Gateway:</span>
             <div className="flex items-center space-x-1.5">
               <span
                 className={`w-2 h-2 rounded-full inline-block ${
                   systemStatus === "ok"
-                    ? "bg-emerald-500 glow-emerald animate-pulse"
+                    ? "bg-emerald-500"
                     : systemStatus === "error"
-                    ? "bg-rose-500 animate-ping"
+                    ? "bg-rose-500"
                     : "bg-amber-500 animate-pulse"
                 }`}
               />
               <span
-                className={`text-[10px] font-extrabold uppercase ${
+                className={`text-[11px] font-semibold ${
                   systemStatus === "ok"
                     ? "text-emerald-400"
                     : systemStatus === "error"
@@ -164,10 +163,10 @@ export default function AdminHeader() {
                 }`}
               >
                 {systemStatus === "ok"
-                  ? "ONLINE"
+                  ? "Operational"
                   : systemStatus === "error"
-                  ? "OFFLINE"
-                  : "CHECKING..."}
+                  ? "Offline"
+                  : "Checking"}
               </span>
             </div>
           </div>
@@ -176,11 +175,11 @@ export default function AdminHeader() {
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="w-10 h-10 rounded-xl bg-slate-900/40 border border-slate-900 hover:border-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors relative"
+              className="w-9 h-9 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors relative"
             >
               <Bell className="w-4 h-4" />
               {notifications.length > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500 glow-blue" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500" />
               )}
             </button>
 
@@ -223,12 +222,12 @@ export default function AdminHeader() {
       {/* Cmd + K Command Palette Overlay */}
       <AnimatePresence>
         {showSearchModal && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-start justify-center pt-24 p-4">
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center pt-24 p-4">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-slate-900 rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-slate-800 space-y-4 text-slate-100"
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="bg-slate-900 rounded-2xl p-6 max-w-2xl w-full shadow-2xl border border-slate-800 space-y-4 text-slate-100"
             >
               {/* Search Header */}
               <div className="relative flex items-center border-b border-slate-800 pb-4">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AdminSidebar from "@/components/AdminSidebar";
 import { apiClient } from "@/services/apiClient";
+import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminAuditLogsPage() {
@@ -29,7 +30,7 @@ export default function AdminAuditLogsPage() {
         </div>
 
         {loading ? (
-          <div className="py-20 text-center text-xs font-semibold text-slate-400">Loading audit logs...</div>
+          <AdminTableSkeleton rows={8} columns={6} />
         ) : (
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
             <table className="w-full text-left border-collapse">

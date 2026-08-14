@@ -17,6 +17,7 @@ import {
   Mail,
   UserPlus,
 } from "lucide-react";
+import { AdminCardGridSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminExecutivesPage() {
@@ -89,10 +90,7 @@ export default function AdminExecutivesPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading team executive roster...</p>
-            </div>
+            <AdminCardGridSkeleton count={3} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {users.map((u) => (

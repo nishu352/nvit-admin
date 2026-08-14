@@ -13,8 +13,8 @@ import {
   Search,
   Tag,
   ShieldAlert,
-  Sparkles,
 } from "lucide-react";
+import { AdminFormSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminMarketingPage() {
   const [loading, setLoading] = useState(true);
@@ -132,10 +132,7 @@ export default function AdminMarketingPage() {
           )}
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading tracking configurations...</p>
-            </div>
+            <AdminFormSkeleton />
           ) : (
             <form onSubmit={handleSaveMarketing} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Analytics & Ad Pixels */}

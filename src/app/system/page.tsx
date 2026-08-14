@@ -13,6 +13,7 @@ import {
   Power,
   Server,
 } from "lucide-react";
+import { AdminFormSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminSystemPage() {
   const [loading, setLoading] = useState(true);
@@ -123,10 +124,7 @@ export default function AdminSystemPage() {
           )}
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading infrastructure parameters...</p>
-            </div>
+            <AdminFormSkeleton />
           ) : (
             <form onSubmit={handleSaveSystem} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* SMTP Credentials */}

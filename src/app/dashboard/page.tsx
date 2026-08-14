@@ -22,8 +22,8 @@ import {
   Globe,
   Settings,
   ArrowUpRight,
-  Sparkles,
 } from "lucide-react";
+import { AdminStatsSkeleton, AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
@@ -76,14 +76,14 @@ export default function AdminDashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-5">
             <div>
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h1 className="text-2xl font-black text-white tracking-tight">Enterprise Operations Overview</h1>
+                <Activity className="w-5 h-5 text-blue-500" />
+                <h1 className="text-2xl font-black text-white tracking-tight">Operations Overview</h1>
               </div>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Real-time credit policy indexes, lead statuses, and system audits</p>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">Credit policy indexes, lead statuses, and system audit trail</p>
             </div>
             <button
               onClick={fetchStats}
-              className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-850 hover:bg-slate-900 hover:border-slate-800 text-xs font-bold text-slate-200 shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
+              className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:border-slate-700 text-xs font-semibold text-slate-200 shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
               <span>Refresh Control Panel</span>
@@ -91,9 +91,12 @@ export default function AdminDashboardPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto glow-royal" />
-              <p className="text-xs font-bold text-slate-400">Loading system metrics...</p>
+            <div className="space-y-8">
+              <AdminStatsSkeleton />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <AdminTableSkeleton rows={4} columns={3} />
+                <AdminTableSkeleton rows={4} columns={3} />
+              </div>
             </div>
           ) : stats ? (
             <motion.div
@@ -110,36 +113,28 @@ export default function AdminDashboardPage() {
                     value: stats.metrics.totalBanks,
                     desc: "Banks & NBFCs Indexed",
                     icon: Building2,
-                    color: "from-blue-500/20 to-indigo-500/5",
                     iconColor: "text-blue-400",
-                    glow: "glow-blue",
                   },
                   {
                     title: "Normalized Companies",
                     value: stats.metrics.totalCompanies,
                     desc: "Unique verified employers",
                     icon: FileSpreadsheet,
-                    color: "from-purple-500/20 to-pink-500/5",
                     iconColor: "text-purple-400",
-                    glow: "glow-purple",
                   },
                   {
                     title: "Pincode Coverage",
                     value: stats.metrics.totalPincodes,
                     desc: "Postal codes serviceable",
                     icon: MapPin,
-                    color: "from-emerald-500/20 to-teal-500/5",
                     iconColor: "text-emerald-400",
-                    glow: "glow-emerald",
                   },
                   {
                     title: "Loan Lead Inquiries",
                     value: stats.metrics.totalApplications,
                     desc: "Lifetime captures",
                     icon: FileCheck,
-                    color: "from-sky-500/20 to-blue-500/5",
                     iconColor: "text-sky-400",
-                    glow: "glow-royal",
                   },
                 ].map((card, idx) => {
                   const Icon = card.icon;

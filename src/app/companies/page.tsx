@@ -18,8 +18,8 @@ import {
   Square,
   ArrowRight,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
+import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminCompaniesPage() {
@@ -237,9 +237,9 @@ export default function AdminCompaniesPage() {
               {selectedIds.length > 0 && (
                 <button
                   onClick={() => setShowBulkModal(true)}
-                  className="h-10 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 text-xs font-extrabold flex items-center gap-2 cursor-pointer"
+                  className="h-10 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors"
                 >
-                  <Layers className="w-4 h-4 animate-bounce" />
+                  <Layers className="w-4 h-4" />
                   <span>Bulk Re-Classify ({selectedIds.length})</span>
                 </button>
               )}
@@ -254,10 +254,7 @@ export default function AdminCompaniesPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading companies index...</p>
-            </div>
+            <AdminTableSkeleton rows={8} columns={5} />
           ) : (
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
               <div className="overflow-x-auto">

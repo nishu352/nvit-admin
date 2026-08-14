@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AdminSidebar from "@/components/AdminSidebar";
 import { apiClient } from "@/services/apiClient";
 import { RefreshCw } from "lucide-react";
+import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 export default function AdminApplicationsPage() {
@@ -48,10 +49,7 @@ export default function AdminApplicationsPage() {
         </div>
 
         {loading ? (
-          <div className="py-20 text-center space-y-3">
-            <div className="w-10 h-10 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-semibold text-slate-400">Loading applications...</p>
-          </div>
+          <AdminTableSkeleton rows={6} columns={6} />
         ) : (
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
             <div className="overflow-x-auto">

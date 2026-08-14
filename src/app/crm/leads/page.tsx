@@ -20,7 +20,6 @@ import {
   FileText,
   MessageSquare,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -128,9 +127,14 @@ export default function AdminCRMLeadsPage() {
 
           {/* Kanban Board */}
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading sales pipeline...</p>
+            <div className="flex-1 flex space-x-4 overflow-x-auto pb-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="w-72 shrink-0 bg-slate-900/40 rounded-2xl border border-slate-800/80 p-4 space-y-3 animate-pulse">
+                  <div className="h-4 w-24 bg-slate-800 rounded" />
+                  <div className="h-28 w-full bg-slate-800/60 rounded-xl" />
+                  <div className="h-28 w-full bg-slate-800/60 rounded-xl" />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="flex-1 flex space-x-4 overflow-x-auto pb-6">

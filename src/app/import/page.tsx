@@ -374,16 +374,16 @@ export default function AdminImportPage() {
           <div className="flex items-start justify-between border-b border-slate-900 pb-5">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-royal to-blue-500 flex items-center justify-center">
-                  <Brain className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <FileSpreadsheet className="w-4 h-4 text-white" />
                 </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">AI-Assisted Data Import</h1>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-royal/20 text-royal border border-royal/30 uppercase tracking-wider">
-                  Admin Only
+                <h1 className="text-2xl font-black text-white tracking-tight">Structured Data Import</h1>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider">
+                  Admin Verification
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-medium ml-10">
-                Secure AI-powered Excel / CSV import with read-only preview and confirmation before writing to production
+                Automated Excel / CSV import with column mapping verification before committing records to database
               </p>
             </div>
             <StepIndicator current={step} />
@@ -522,10 +522,10 @@ export default function AdminImportPage() {
                   <button
                     onClick={handleAnalyze}
                     disabled={!file || !selectedBankId}
-                    className="w-full h-12 rounded-xl bg-royal hover:bg-royal-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs shadow-lg shadow-royal/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Brain className="w-4 h-4" />
-                    Analyze File with AI
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Parse &amp; Analyze Schema
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -600,27 +600,24 @@ export default function AdminImportPage() {
               STEP: ANALYZING
           ════════════════════════════════════════════════════════════════ */}
           {step === "analyzing" && (
-            <div className="flex flex-col items-center justify-center py-24 space-y-8">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-royal/10 border border-royal/30 flex items-center justify-center">
-                  <Brain className="w-10 h-10 text-royal animate-pulse" />
-                </div>
-                <div className="absolute inset-0 rounded-full border-2 border-royal/30 animate-ping" />
+            <div className="flex flex-col items-center justify-center py-20 space-y-6 max-w-md mx-auto text-center">
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <FileSpreadsheet className="w-8 h-8 animate-pulse" />
               </div>
-              <div className="text-center space-y-2">
-                <p className="text-lg font-black text-white">Analyzing Your File</p>
-                <p className="text-xs text-slate-400 font-medium">
-                  Reading column structure · Running AI analysis · Building secure preview
+              <div className="space-y-2">
+                <p className="text-base font-bold text-white">Analyzing Spreadsheet Structure</p>
+                <p className="text-xs text-slate-400">
+                  Parsing column headers, validating schema rules, and building field mapping preview.
                 </p>
                 {file && (
-                  <p className="text-xs text-slate-600 font-mono">
+                  <p className="text-xs text-slate-500 font-mono">
                     {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-semibold">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                This may take a few seconds for large files
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium bg-slate-900 px-4 py-2 rounded-full border border-slate-800">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                Validating dataset rows...
               </div>
             </div>
           )}

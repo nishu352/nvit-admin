@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ShieldCheck,
 } from "lucide-react";
+import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminCRMCustomersPage() {
@@ -80,10 +81,7 @@ export default function AdminCRMCustomersPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading customer profiles...</p>
-            </div>
+            <AdminTableSkeleton rows={8} columns={6} />
           ) : (
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
               <div className="overflow-x-auto">

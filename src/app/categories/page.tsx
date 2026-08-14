@@ -16,6 +16,7 @@ import {
   XCircle,
   HelpCircle,
 } from "lucide-react";
+import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 
 export default function AdminCategoriesPage() {
   const [mappings, setMappings] = useState<any[]>([]);
@@ -168,10 +169,7 @@ export default function AdminCategoriesPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading mappings registry...</p>
-            </div>
+            <AdminTableSkeleton rows={8} columns={5} />
           ) : (
             <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
               <div className="overflow-x-auto">

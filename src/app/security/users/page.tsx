@@ -16,6 +16,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { AdminCardGridSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminSecurityUsersPage() {
@@ -115,10 +116,7 @@ export default function AdminSecurityUsersPage() {
           </div>
 
           {loading ? (
-            <div className="py-32 text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-royal border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-400">Loading security parameters...</p>
-            </div>
+            <AdminCardGridSkeleton count={4} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* API Keys Table */}
