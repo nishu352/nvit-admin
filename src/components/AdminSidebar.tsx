@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, memo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Building2,
@@ -48,83 +49,114 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
-export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
+// Helper component for Master Management icon defined statically outside component to ensure stable identity
+function DatabaseIcon(props: any) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+      <path d="M3 12A9 3 0 0 0 21 12" />
+    </svg>
+  );
+}
+
+// Static definition of sidebar sections to prevent re-creation on every render
+const STATIC_SECTIONS: SidebarSection[] = [
+  {
+    title: "MASTER MANAGEMENT",
+    id: "master",
+    icon: DatabaseIcon,
+    items: [
+      { name: "Banks & NBFCs", href: "/banks", icon: Building2 },
+      { name: "Company Management", href: "/companies", icon: Building },
+      { name: "Company Categories", href: "/categories", icon: FolderTree },
+      { name: "Pincode Management", href: "/pincodes", icon: MapPin },
+      { name: "Loan Products", href: "/loan-products", icon: Package },
+      { name: "Bank Policies", href: "/policies", icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: "DATA MANAGEMENT",
+    id: "data",
+    icon: UploadCloud,
+    items: [
+      { name: "Company Excel Upload", href: "/import", icon: UploadCloud },
+      { name: "Pincode Excel Upload", href: "/pincodes/import", icon: UploadCloud },
+      { name: "Import History", href: "/import-history", icon: History },
+    ],
+  },
+  {
+    title: "CRM",
+    id: "crm",
+    icon: UserSquare2,
+    items: [
+      { name: "Lead Management", href: "/crm/leads", icon: GitPullRequest },
+      { name: "Customer Management", href: "/crm/customers", icon: UserCheck },
+      { name: "Executives", href: "/executives", icon: UserSquare2 },
+    ],
+  },
+  {
+    title: "WEBSITE CMS",
+    id: "cms",
+    icon: Globe,
+    items: [
+      { name: "CMS Live Config", href: "/cms", icon: Layout },
+    ],
+  },
+  {
+    title: "MARKETING",
+    id: "marketing",
+    icon: Megaphone,
+    items: [
+      { name: "Marketing Integrations", href: "/marketing", icon: Target },
+    ],
+  },
+  {
+    title: "USERS & SECURITY",
+    id: "security",
+    icon: Shield,
+    items: [
+      { name: "Security Users", href: "/security/users", icon: User },
+      { name: "Compliance Audit Logs", href: "/audit-logs", icon: ShieldAlert },
+    ],
+  },
+];
+
+function AdminSidebarComponent({ isMobile, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    master: false,
-    data: false,
-    crm: false,
-    cms: false,
-    marketing: false,
-    security: false,
-    system: false,
+
+  // Initialize expanded sections with the currently active section already open
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {
+      master: false,
+      data: false,
+      crm: false,
+      cms: false,
+      marketing: false,
+      security: false,
+      system: false,
+    };
+    for (const sec of STATIC_SECTIONS) {
+      if (sec.items.some((item) => pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href)))) {
+        initial[sec.id] = true;
+      }
+    }
+    return initial;
   });
 
-  const sections: SidebarSection[] = [
-    {
-      title: "MASTER MANAGEMENT",
-      id: "master",
-      icon: DatabaseIcon,
-      items: [
-        { name: "Banks & NBFCs", href: "/banks", icon: Building2 },
-        { name: "Company Management", href: "/companies", icon: Building },
-        { name: "Company Categories", href: "/categories", icon: FolderTree },
-        { name: "Pincode Management", href: "/pincodes", icon: MapPin },
-        { name: "Loan Products", href: "/loan-products", icon: Package },
-        { name: "Bank Policies", href: "/policies", icon: FileSpreadsheet },
-      ],
-    },
-    {
-      title: "DATA MANAGEMENT",
-      id: "data",
-      icon: UploadCloud,
-      items: [
-        { name: "Company Excel Upload", href: "/import", icon: UploadCloud },
-        { name: "Pincode Excel Upload", href: "/pincodes/import", icon: UploadCloud },
-        { name: "Import History", href: "/import-history", icon: History },
-      ],
-    },
-    {
-      title: "CRM",
-      id: "crm",
-      icon: UserSquare2,
-      items: [
-        { name: "Lead Management", href: "/crm/leads", icon: GitPullRequest },
-        { name: "Customer Management", href: "/crm/customers", icon: UserCheck },
-        { name: "Executives", href: "/executives", icon: UserSquare2 },
-      ],
-    },
-    {
-      title: "WEBSITE CMS",
-      id: "cms",
-      icon: Globe,
-      items: [
-        { name: "CMS Live Config", href: "/cms", icon: Layout },
-      ],
-    },
-    {
-      title: "MARKETING",
-      id: "marketing",
-      icon: Megaphone,
-      items: [
-        { name: "Marketing Integrations", href: "/marketing", icon: Target },
-      ],
-    },
-    {
-      title: "USERS & SECURITY",
-      id: "security",
-      icon: Shield,
-      items: [
-        { name: "Security Users", href: "/security/users", icon: User },
-        { name: "Compliance Audit Logs", href: "/audit-logs", icon: ShieldAlert },
-      ],
-    },
-  ];
-
-  // Dynamically filter sections based on role
+  // Dynamically filter sections based on role with stable reference
   const visibleSections = useMemo(() => {
-    return sections
+    return STATIC_SECTIONS
       .filter((sec) => {
         if (!user) return false;
         if (user.role === "EXECUTIVE") {
@@ -139,39 +171,19 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
         return true;
       })
       .map((sec) => {
-        let items = [...sec.items];
+        let items = sec.items;
         // Hide Executives list from EXECUTIVE & VIEWER roles
         if (user?.role === "EXECUTIVE" || user?.role === "VIEWER") {
           items = items.filter((item) => item.href !== "/executives");
         }
         return { ...sec, items };
       });
-  }, [user]);
+  }, [user?.role]);
 
-  // Helper component for Master Management icon to prevent variable naming conflicts
-  function DatabaseIcon(props: any) {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        {...props}
-      >
-        <ellipse cx="12" cy="5" rx="9" ry="3" />
-        <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-        <path d="M3 12A9 3 0 0 0 21 12" />
-      </svg>
-    );
-  }
-
-  // Auto-expand active section on load
+  // Ensure active section is expanded upon navigation without resetting other user-expanded sections
   useEffect(() => {
     const activeSection = visibleSections.find((sec) =>
-      sec.items.some((item) => pathname.startsWith(item.href))
+      sec.items.some((item) => pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href)))
     );
     if (activeSection) {
       setExpandedSections((prev) => {
@@ -195,7 +207,7 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
   };
 
   return (
-    <aside className="w-full h-full bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 flex flex-col justify-between border-r border-slate-200 dark:border-slate-900 overflow-y-auto">
+    <aside className="w-full h-full bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 flex flex-col justify-between border-r border-slate-200 dark:border-slate-900 overflow-y-auto select-none">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Brand Header */}
         <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-900 flex items-center justify-between shrink-0 select-none">
@@ -223,7 +235,7 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
           {isMobile && onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
               aria-label="Close navigation"
             >
               <X className="w-5 h-5" />
@@ -248,14 +260,21 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
           <Link
             href="/dashboard"
             onClick={handleLinkClick}
-            className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`relative flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
               pathname === "/dashboard"
-                ? "bg-royal text-white shadow-md shadow-royal/20"
+                ? "text-white"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
             }`}
           >
-            <LayoutDashboard className="w-4 h-4 shrink-0" />
-            <span>Dashboard</span>
+            {pathname === "/dashboard" && (
+              <motion.div
+                layoutId="sidebar-active-dashboard"
+                className="absolute inset-0 bg-royal rounded-xl shadow-md shadow-royal/20 pointer-events-none"
+                transition={{ type: "spring", stiffness: 450, damping: 35 }}
+              />
+            )}
+            <LayoutDashboard className="w-4 h-4 shrink-0 relative z-10" />
+            <span className="relative z-10">Dashboard</span>
           </Link>
 
           {/* Section list */}
@@ -268,6 +287,7 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
               <div key={section.id} className="space-y-0.5 pt-1">
                 {/* Header button */}
                 <button
+                  type="button"
                   onClick={() => toggleSection(section.id)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                     isSubitemActive
@@ -288,23 +308,30 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
 
                 {/* Sub items collapsible list */}
                 {expanded && (
-                  <div className="pl-3 space-y-0.5 border-l border-slate-200 dark:border-slate-900 ml-5 my-0.5 animate-slow-fade">
+                  <div className="pl-3 space-y-0.5 border-l border-slate-200 dark:border-slate-900 ml-5 my-0.5">
                     {section.items.map((item) => {
                       const ItemIcon = item.icon;
                       const active = pathname === item.href;
                       return (
                         <Link
-                          key={item.name}
+                          key={item.href}
                           href={item.href}
                           onClick={handleLinkClick}
-                          className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          className={`relative flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs transition-colors ${
                             active
-                              ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-900 font-bold border-r-2 border-blue-600 dark:border-blue-500"
-                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/40"
+                              ? "text-blue-600 dark:text-blue-400 font-bold"
+                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/40 font-semibold"
                           }`}
                         >
-                          <ItemIcon className="w-3.5 h-3.5 shrink-0" />
-                          <span>{item.name}</span>
+                          {active && (
+                            <motion.div
+                              layoutId="sidebar-active-subitem"
+                              className="absolute inset-0 bg-blue-50 dark:bg-slate-900 rounded-lg border-r-2 border-blue-600 dark:border-blue-500 pointer-events-none"
+                              transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                            />
+                          )}
+                          <ItemIcon className="w-3.5 h-3.5 shrink-0 relative z-10" />
+                          <span className="relative z-10">{item.name}</span>
                         </Link>
                       );
                     })}
@@ -329,3 +356,6 @@ export default function AdminSidebar({ isMobile, onClose }: AdminSidebarProps) {
     </aside>
   );
 }
+
+const AdminSidebar = memo(AdminSidebarComponent);
+export default AdminSidebar;

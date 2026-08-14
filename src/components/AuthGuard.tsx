@@ -33,9 +33,8 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, isAuthenticated, checkAuth, isLoading } = useAuthStore();
 
-  // checking = true until the async checkAuth() call finishes
+  // checking = true until initial checkAuth() finishes
   const [checking, setChecking] = useState(true);
-  // redirecting = true while we're waiting for router.push to take effect
   const [redirecting, setRedirecting] = useState(false);
 
   // ── Step 1: Run auth check once on mount ────────────────────────────────
@@ -48,13 +47,17 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [checkAuth]);
 
-  // ── Step 2: Apply role/page CSS classes to <html> ───────────────────────
+  // ── Step 2: Apply role/page CSS classes to <html> safely ───────────────
   useEffect(() => {
     const root = document.documentElement;
-    root.className = root.className
-      .split(" ")
-      .filter((c) => !c.startsWith("role-") && !c.startsWith("page-"))
-      .join(" ");
+    // Remove only previous role-* and page-* classes without removing dark mode
+    const classesToRemove: string[] = [];
+    root.classList.forEach((cls) => {
+      if (cls.startsWith("role-") || cls.startsWith("page-")) {
+        classesToRemove.push(cls);
+      }
+    });
+    classesToRemove.forEach((cls) => root.classList.remove(cls));
 
     if (user) root.classList.add(`role-${user.role.toLowerCase()}`);
     const pageName =
@@ -62,18 +65,16 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     root.classList.add(`page-${pageName}`);
   }, [user, pathname]);
 
-  // ── Step 3: Handle redirects in useEffect (NOT during render) ───────────
+  // ── Step 3: Handle redirects in useEffect ───────────────────────────────
   useEffect(() => {
-    if (checking) return; // Wait until auth check is done
+    if (checking) return;
 
-    // On login page ("/") — if already logged in, go to dashboard
-    if (pathname === "/" && isAuthenticated) {
+    if (pathname === "/" && isAuthenticated && user) {
       setRedirecting(true);
       router.replace("/dashboard");
       return;
     }
 
-    // On protected pages — if not logged in, go to login
     if (pathname !== "/" && (!isAuthenticated || !user)) {
       setRedirecting(true);
       router.replace("/");
@@ -83,8 +84,9 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     setRedirecting(false);
   }, [checking, isAuthenticated, user, pathname, router]);
 
-  // ── Loading states ───────────────────────────────────────────────────────
-  if (checking || isLoading || redirecting) {
+  // ── Initial Loading state (only when user session is not yet loaded) ────
+  const showInitialLoading = (!user && checking) || (!user && isLoading) || (!user && redirecting);
+  if (showInitialLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-10 h-10 text-royal animate-spin" />
@@ -95,14 +97,14 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  // ── Login page — unauthenticated users see the login form ────────────────
+  // ── Login page — unauthenticated users see login form ───────────────────
   if (pathname === "/") {
-    return <div key={pathname} className="contents">{children}</div>;
+    return <div key="admin-auth-login" className="contents">{children}</div>;
   }
 
   // ── Protected page — check role authorization ────────────────────────────
   const allowedRoles =
-    PAGE_PERMISSIONS[pathname] ?? ["SUPER_ADMIN", "ADMIN"]; // strict fallback
+    PAGE_PERMISSIONS[pathname] ?? ["SUPER_ADMIN", "ADMIN"];
   const isAuthorized = user ? allowedRoles.includes(user.role) : false;
 
   if (!isAuthorized) {
