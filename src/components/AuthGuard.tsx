@@ -26,6 +26,7 @@ const PAGE_PERMISSIONS: Record<string, string[]> = {
   "/audit-logs": ["SUPER_ADMIN", "ADMIN"],
   "/applications": ["SUPER_ADMIN", "ADMIN", "MANAGER", "EXECUTIVE", "VIEWER"],
   "/system": ["SUPER_ADMIN", "ADMIN"],
+  "/data-cleanup": ["SUPER_ADMIN", "ADMIN"],
 };
 
 export default function AuthGuard({ children }: { children: ReactNode }) {

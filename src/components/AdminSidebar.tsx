@@ -29,6 +29,7 @@ import {
   ChevronRight,
   LogOut,
   X,
+  Sparkles,
 } from "lucide-react";
 
 interface SidebarItem {
@@ -92,6 +93,7 @@ const STATIC_SECTIONS: SidebarSection[] = [
       { name: "Company Excel Upload", href: "/import", icon: UploadCloud },
       { name: "Pincode Excel Upload", href: "/pincodes/import", icon: UploadCloud },
       { name: "Import History", href: "/import-history", icon: History },
+      { name: "Database Sanitizer", href: "/data-cleanup", icon: Sparkles },
     ],
   },
   {
