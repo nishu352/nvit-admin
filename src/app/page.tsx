@@ -14,8 +14,8 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login({ email, password });
-      router.push("/dashboard");
+      await login({ email: email.trim(), password });
+      window.location.href = "/dashboard";
     } catch (err) {
       // handled by auth store
     }
