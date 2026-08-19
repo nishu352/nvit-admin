@@ -137,19 +137,19 @@ function ReportModal({ item, onClose }: { item: ImportHistoryItem; onClose: () =
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slow-fade">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slow-fade">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
+        <div className="flex items-start justify-between p-6 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div>
-            <h2 className="text-sm font-black text-white">Import Report</h2>
+            <h2 className="text-sm font-black text-slate-900 dark:text-white">Import Report</h2>
             <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate max-w-[280px]" title={item.fileName}>
               {item.fileName}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -166,18 +166,18 @@ function ReportModal({ item, onClose }: { item: ImportHistoryItem; onClose: () =
           </div>
 
           {/* Core stats grid */}
-          <div className="bg-slate-950 rounded-2xl p-4 grid grid-cols-2 gap-3">
+          <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 grid grid-cols-2 gap-3 border border-slate-100 dark:border-slate-800">
             {[
               { label: "Bank / NBFC", value: `${item.bankName} (${item.bankCode})` },
               { label: "Imported By", value: item.createdByName },
               { label: "Total Rows", value: item.totalRecords?.toLocaleString() ?? "0" },
-              { label: "Imported", value: item.processedRecords?.toLocaleString() ?? "0", color: "text-emerald-400" },
-              { label: "Skipped", value: item.skippedRecords?.toLocaleString() ?? "0", color: "text-amber-400" },
-              { label: "Failed", value: item.failedRecords?.toLocaleString() ?? "0", color: "text-rose-400" },
+              { label: "Imported", value: item.processedRecords?.toLocaleString() ?? "0", color: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Skipped", value: item.skippedRecords?.toLocaleString() ?? "0", color: "text-amber-600 dark:text-amber-400" },
+              { label: "Failed", value: item.failedRecords?.toLocaleString() ?? "0", color: "text-rose-600 dark:text-rose-400" },
             ].map((s) => (
               <div key={s.label}>
                 <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{s.label}</p>
-                <p className={`text-xs font-black mt-0.5 ${(s as any).color || "text-white"} truncate`}>{s.value}</p>
+                <p className={`text-xs font-black mt-0.5 ${(s as any).color || "text-slate-900 dark:text-white"} truncate`}>{s.value}</p>
               </div>
             ))}
           </div>
@@ -194,11 +194,11 @@ function ReportModal({ item, onClose }: { item: ImportHistoryItem; onClose: () =
           {/* Column mapping used */}
           {mapping && (
             <div className="space-y-2">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <h4 className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Database className="w-3 h-3" />
                 Column Mapping Used
               </h4>
-              <div className="bg-slate-950 rounded-xl divide-y divide-slate-900">
+              <div className="bg-slate-50 dark:bg-slate-950 rounded-xl divide-y divide-slate-100 dark:divide-slate-900 border border-slate-100 dark:border-slate-800">
                 {Object.entries(mapping)
                   .filter(([_, v]) => v)
                   .map(([key, col]) => (
@@ -206,17 +206,17 @@ function ReportModal({ item, onClose }: { item: ImportHistoryItem; onClose: () =
                       <span className="text-[10px] text-slate-500 font-semibold">
                         {fieldLabels[key] || key}
                       </span>
-                      <span className="text-[10px] text-slate-300 font-bold truncate max-w-[180px]">{col}</span>
+                      <span className="text-[10px] text-slate-700 dark:text-slate-300 font-bold truncate max-w-[180px]">{col}</span>
                     </div>
                   ))}
                 {Object.entries(mapping)
                   .filter(([_, v]) => !v)
                   .map(([key, _]) => (
                     <div key={key} className="flex items-center justify-between px-3 py-2">
-                      <span className="text-[10px] text-slate-600 font-semibold">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-600 font-semibold">
                         {fieldLabels[key] || key}
                       </span>
-                      <span className="text-[10px] text-slate-700 font-medium italic">— Not mapped</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-700 font-medium italic">— Not mapped</span>
                     </div>
                   ))}
               </div>
@@ -225,14 +225,14 @@ function ReportModal({ item, onClose }: { item: ImportHistoryItem; onClose: () =
 
           {/* Error message */}
           {item.errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
-              <p className="text-[10px] text-rose-300 font-semibold">{item.errorMessage}</p>
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-rose-700 dark:text-rose-300 font-semibold">{item.errorMessage}</p>
             </div>
           )}
 
           {/* Security notice */}
-          <div className="text-[9px] text-slate-600 font-medium border-t border-slate-800 pt-3">
+          <div className="text-[9px] text-slate-400 dark:text-slate-600 font-medium border-t border-slate-100 dark:border-slate-800 pt-3">
             Import ID: {item.id} · This report is read-only and stored in the audit log.
           </div>
         </div>
@@ -333,14 +333,14 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-slate-800 shrink-0">
+        <div className="flex items-start justify-between p-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
-              <h2 className="text-sm font-black text-white">Row-Level Import Errors</h2>
+              <AlertTriangle className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">Row-Level Import Errors</h2>
             </div>
             <p className="text-[10px] text-slate-500 font-medium mt-0.5 truncate max-w-[400px]" title={item.fileName}>
               {item.fileName} · {item.failedRecords.toLocaleString()} failed rows
@@ -351,7 +351,7 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
             {data && data.items.length > 0 && (
               <button
                 onClick={toggleSelectAll}
-                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 hover:text-white text-[10px] font-black text-slate-300 uppercase tracking-wider transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
               >
                 {selectAllGlobally || selectedErrors.size > 0 ? "Deselect All" : `Select All ${data.total.toLocaleString()}`}
               </button>
@@ -369,7 +369,7 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
             )}
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -378,11 +378,11 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {syncSuccess !== null && (
-            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
-              <BadgeCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
+              <BadgeCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-[10px] text-emerald-300 font-bold">Successfully synced {syncSuccess} records!</p>
-                <p className="text-[9px] text-emerald-400/80 mt-0.5">They have been added to the database and removed from this error log.</p>
+                <p className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold">Successfully synced {syncSuccess} records!</p>
+                <p className="text-[9px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">They have been added to the database and removed from this error log.</p>
               </div>
             </div>
           )}
@@ -399,8 +399,8 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
                   onClick={() => handleFilter(b.code)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
                     filterCode === b.code
-                      ? (ERROR_CODE_STYLES[b.code] || "bg-slate-700 text-white border-slate-600") + " ring-1 ring-white/20"
-                      : "bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500"
+                      ? (ERROR_CODE_STYLES[b.code] || "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600") + " ring-1 ring-slate-400/20"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500"
                   }`}
                 >
                   {b.code} ({b.count.toLocaleString()})
@@ -409,7 +409,7 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
               {filterCode && (
                 <button
                   onClick={() => handleFilter("")}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border bg-slate-800 text-slate-500 border-slate-700 hover:text-white cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                 >
                   Clear ✕
                 </button>
@@ -419,26 +419,26 @@ function ImportErrorsModal({ item, onClose }: { item: ImportHistoryItem; onClose
 
           {/* Table */}
           {loading ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-500 dark:text-slate-400">
               <Loader2 className="w-7 h-7 animate-spin" />
               <p className="text-xs font-bold">Loading errors…</p>
             </div>
           ) : !data || data.items.length === 0 ? (
             <div className="py-12 text-center space-y-2">
               <BadgeCheck className="w-10 h-10 text-emerald-500 mx-auto" />
-              <p className="text-xs font-black text-white">No errors found{filterCode ? ` for ${filterCode}` : ""}</p>
+              <p className="text-xs font-black text-slate-900 dark:text-white">No errors found{filterCode ? ` for ${filterCode}` : ""}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-950 border-b border-slate-800">
+                  <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
                     <th className="py-3 px-4 w-10">
                       <input
                         type="checkbox"
                         checked={selectAllGlobally || (data.items.length > 0 && selectedErrors.size === data.items.length)}
                         onChange={toggleSelectAll}
-                        className="rounded bg-slate-900 border-slate-700 text-royal focus:ring-royal/50"
+                        className="rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-royal focus:ring-royal/50"
                       />
                     </th>
                     {["Row #", "Error Code", "Message", "Raw Data"].map((col) => (

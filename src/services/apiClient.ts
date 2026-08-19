@@ -10,6 +10,11 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
+// Dedicated lightweight client for health checks — short timeout, never blocks on busy server
+export const healthClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 5000, // 5s only — if backend is truly down this will fail fast
+});
 // Dedicated client for file uploads — much longer timeout for large Excel imports
 export const importApiClient = axios.create({
   baseURL: API_BASE_URL,

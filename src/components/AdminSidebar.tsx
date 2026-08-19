@@ -30,6 +30,8 @@ import {
   LogOut,
   X,
   Sparkles,
+  Sliders,
+  Activity,
 } from "lucide-react";
 
 interface SidebarItem {
@@ -129,6 +131,15 @@ const STATIC_SECTIONS: SidebarSection[] = [
     items: [
       { name: "Security Users", href: "/security/users", icon: User },
       { name: "Compliance Audit Logs", href: "/audit-logs", icon: ShieldAlert },
+    ],
+  },
+  {
+    title: "SYSTEM & INFRASTRUCTURE",
+    id: "system",
+    icon: Sliders,
+    items: [
+      { name: "VPS & DB Analytics", href: "/analytics", icon: Activity },
+      { name: "System Settings", href: "/system", icon: Sliders },
     ],
   },
 ];

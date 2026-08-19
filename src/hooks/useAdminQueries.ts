@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/services/apiClient";
+import { apiClient, healthClient } from "@/services/apiClient";
 
 // Query Keys
 export const ADMIN_QUERY_KEYS = {
@@ -19,16 +19,18 @@ export const ADMIN_QUERY_KEYS = {
   auditLogs: (page: number, limit: number) => ["admin", "auditLogs", { page, limit }] as const,
 };
 
-// 1. Gateway Health Query
+// 1. Gateway Health Query — uses dedicated healthClient (5s timeout, never blocked by uploads)
 export function useHealthQuery() {
   return useQuery<any>({
     queryKey: ADMIN_QUERY_KEYS.health,
     queryFn: async () => {
-      const res = await apiClient.get("/health");
+      const res = await healthClient.get("/health");
       return res.data;
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000,
+    staleTime: 60 * 1000,        // 1 minute cache
+    refetchInterval: 60 * 1000,  // Poll every 60s (not 30s) — less noise during uploads
+    retry: false,                // Don't retry on fail — avoids showing "Offline" on transient blip
+    retryOnMount: false,
   });
 }
 
