@@ -187,23 +187,27 @@ export default function PincodeImportPage() {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [banksLoading, setBanksLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch banks on mount
   const fetchBanks = useCallback(async () => {
+    setBanksLoading(true);
     try {
-      const res = await apiClient.get("/banks?limit=100");
-      if (res.data.success) {
-        setBanks(res.data.data.items);
-        if (res.data.data.items.length > 0 && !selectedBankId) {
-          setSelectedBankId(res.data.data.items[0].id);
+      const res = await apiClient.get("/admin/banks");
+      if (res.data && res.data.success && Array.isArray(res.data.data)) {
+        setBanks(res.data.data);
+        if (res.data.data.length > 0) {
+          setSelectedBankId((prev) => prev || res.data.data[0].id);
         }
       }
     } catch (e) {
       console.error("Failed to load banks", e);
+    } finally {
+      setBanksLoading(false);
     }
-  }, [selectedBankId]);
+  }, []);
 
   useEffect(() => {
     fetchBanks();
@@ -433,13 +437,18 @@ export default function PincodeImportPage() {
                 <select
                   value={selectedBankId}
                   onChange={(e) => setSelectedBankId(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-royal transition-colors"
+                  disabled={banksLoading || banks.length === 0}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-royal transition-colors disabled:opacity-60"
                 >
-                  {banks.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.code}) — {b.type}
-                    </option>
-                  ))}
+                  {banks.length === 0 ? (
+                    <option value="">{banksLoading ? "Loading partner institutions..." : "No partner institutions found"}</option>
+                  ) : (
+                    banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.code}) — {b.type}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
