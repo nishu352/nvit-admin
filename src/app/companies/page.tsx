@@ -23,7 +23,10 @@ import {
   Building2,
   X,
   PlusCircle,
+  AlertCircle,
+  FileSpreadsheet,
 } from "lucide-react";
+import { getCategoryStatus } from "@/utils/categoryStatus";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
 
@@ -377,19 +380,22 @@ export default function AdminCompaniesPage() {
                       <td className="p-4">
                         <div className="flex flex-wrap gap-1.5 max-w-md">
                           {(!company.bankCategories || company.bankCategories.length === 0) ? (
-                            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20 text-[10px] font-bold">
                               UNLISTED
                             </span>
                           ) : (
-                            company.bankCategories.map((bc: any) => (
-                              <span
-                                key={bc.id || `${company.id}-${bc.bank?.code}`}
-                                className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[10px] font-extrabold flex items-center gap-1"
-                              >
-                                <span>{bc.bank?.code}:</span>
-                                <span className="font-black text-slate-900 dark:text-white">{bc.category}</span>
-                              </span>
-                            ))
+                            company.bankCategories.map((bc: any) => {
+                              const visual = getCategoryStatus(bc.category);
+                              return (
+                                <span
+                                  key={bc.id || `${company.id}-${bc.bank?.code}`}
+                                  className={`px-2 py-0.5 rounded border text-[10px] font-extrabold flex items-center gap-1 ${visual.badgeClass}`}
+                                >
+                                  <span className="opacity-75">{bc.bank?.code}:</span>
+                                  <span className="font-black">{bc.category}</span>
+                                </span>
+                              );
+                            })
                           )}
                         </div>
                       </td>

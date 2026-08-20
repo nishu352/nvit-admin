@@ -17,6 +17,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
+import { getCategoryStatus } from "@/utils/categoryStatus";
 
 export default function AdminCategoriesPage() {
   const queryClient = useQueryClient();
@@ -166,9 +167,14 @@ export default function AdminCategoriesPage() {
                         <div className="text-[9px] font-mono text-blue-600 dark:text-blue-400">{m.bank.code}</div>
                       </td>
                       <td className="py-4.5 px-6">
-                        <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400">
-                          {m.category}
-                        </span>
+                        {(() => {
+                          const visual = getCategoryStatus(m.category);
+                          return (
+                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-black border ${visual.badgeClass}`}>
+                              {m.category}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-4.5 px-6">
                         <div className="flex items-center space-x-1.5">
