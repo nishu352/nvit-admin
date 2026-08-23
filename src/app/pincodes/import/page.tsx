@@ -9,22 +9,18 @@ import {
   AlertCircle,
   Loader2,
   Building2,
-  ChevronRight,
+  MapPin,
   Brain,
-  ShieldCheck,
   Eye,
-  TriangleAlert,
-  RefreshCw,
-  Info,
-  ChevronDown,
   ArrowRight,
   X,
   Database,
-  BadgeCheck,
-  MapPin,
+  FileCheck,
 } from "lucide-react";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { motion } from "motion/react";
+import Link from "next/link";
+import { useToast } from "@/components/ui/Toast";
+import type { Bank } from "@/types";
 
 type WizardStep = "upload" | "analyzing" | "mapping" | "importing" | "result";
 
@@ -84,1085 +80,741 @@ interface ImportStatus {
   errorMessage?: string;
 }
 
-// ─── Target field display metadata ───────────────────────────────────────────
-
 const TARGET_FIELDS: { key: keyof ConfirmedMapping; label: string; required: boolean; icon: string }[] = [
-  { key: "pincode", label: "Pincode", required: true, icon: "📍" },
-  { key: "state", label: "State", required: false, icon: "🗺️" },
-  { key: "city", label: "City", required: false, icon: "🏙️" },
-  { key: "area", label: "Area / Region", required: false, icon: "🏘️" },
-  { key: "serviceable", label: "Is Serviceable", required: false, icon: "✅" },
-  { key: "negative", label: "Is Negative", required: false, icon: "🚫" },
-  { key: "category", label: "Category", required: false, icon: "🏷️" },
+  { key: "pincode", label: "Postal Pincode", required: true, icon: "📍" },
+  { key: "state", label: "State / UT", required: false, icon: "🗺️" },
+  { key: "city", label: "City / District", required: false, icon: "🏙️" },
+  { key: "area", label: "Locality / Branch Zone", required: false, icon: "🏘️" },
+  { key: "serviceable", label: "Serviceable Flag", required: false, icon: "✅" },
+  { key: "negative", label: "Negative / Risk Flag", required: false, icon: "🚫" },
+  { key: "category", label: "Zone Category", required: false, icon: "🏷️" },
 ];
-
-// ─── Confidence helper ────────────────────────────────────────────────────────
 
 function confidenceColor(conf: number): string {
-  if (conf >= 85) return "text-emerald-600 dark:text-emerald-400";
-  if (conf >= 60) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
+  if (conf >= 85) return "text-emerald-400";
+  if (conf >= 60) return "text-amber-400";
+  return "text-rose-400";
 }
-
-function confidenceBg(conf: number): string {
-  if (conf >= 85) return "bg-emerald-500";
-  if (conf >= 60) return "bg-amber-500";
-  return "bg-rose-500";
-}
-
-function confidenceBorder(conf: number): string {
-  if (conf >= 85) return "border-emerald-500/30";
-  if (conf >= 60) return "border-amber-500/30";
-  return "border-rose-500/30";
-}
-
-// ─── Step Progress Indicator ──────────────────────────────────────────────────
-
-const STEPS = [
-  { id: "upload", label: "Upload" },
-  { id: "analyzing", label: "Analyze" },
-  { id: "mapping", label: "Review" },
-  { id: "importing", label: "Import" },
-  { id: "result", label: "Report" },
-];
-
-function StepIndicator({ current }: { current: WizardStep }) {
-  const stepIndex = STEPS.findIndex((s) => s.id === current);
-  return (
-    <div className="flex items-center gap-0">
-      {STEPS.map((step, i) => {
-        const isCompleted = i < stepIndex;
-        const isCurrent = i === stepIndex;
-        return (
-          <div key={step.id} className="flex items-center">
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black transition-all duration-300 ${
-                isCompleted
-                  ? "bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30"
-                  : isCurrent
-                  ? "bg-blue-50 dark:bg-royal/20 text-royal border border-blue-200 dark:border-royal/40"
-                  : "bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-800"
-              }`}
-            >
-              {isCompleted ? (
-                <CheckCircle2 className="w-3 h-3" />
-              ) : (
-                <span className={`w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-black ${isCurrent ? "bg-royal text-white" : "bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-500"}`}>
-                  {i + 1}
-                </span>
-              )}
-              <span className="hidden sm:inline">{step.label}</span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div className={`w-4 h-0.5 mx-1 transition-all ${i < stepIndex ? "bg-emerald-500/40" : "bg-slate-200 dark:bg-slate-800"}`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PincodeImportPage() {
+  const { showToast } = useToast();
   const [step, setStep] = useState<WizardStep>("upload");
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Step 1: Upload state
-  const [banks, setBanks] = useState<{ id: string; name: string; code: string; type: string }[]>([]);
-  const [selectedBankId, setSelectedBankId] = useState<string>("");
-  const [importType, setImportType] = useState<"MERGE" | "REPLACE">("MERGE");
-  const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Analysis State
+  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
-  // Step 2 & 3: Analyze & Mapping state
-  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResponse | null>(null);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  // Confirmed Column Mappings
   const [confirmedMapping, setConfirmedMapping] = useState<ConfirmedMapping>({
     pincode: "",
+    state: "",
+    city: "",
+    area: "",
+    serviceable: "",
+    negative: "",
+    category: "",
   });
 
-  // Step 4: Import state
-  const [historyId, setHistoryId] = useState<string | null>(null);
+  // Ingestion State
+  const [importType, setImportType] = useState<"MERGE" | "REPLACE">("MERGE");
+  const [importSessionId, setImportSessionId] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [banksLoading, setBanksLoading] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const [pollingActive, setPollingActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch banks on mount
-  const fetchBanks = useCallback(async () => {
-    setBanksLoading(true);
-    try {
-      const res = await apiClient.get("/admin/banks");
-      if (res.data && res.data.success && Array.isArray(res.data.data)) {
-        setBanks(res.data.data);
-        if (res.data.data.length > 0) {
-          setSelectedBankId((prev) => prev || res.data.data[0].id);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load banks", e);
-    } finally {
-      setBanksLoading(false);
-    }
+  // Fetch Banks
+  useEffect(() => {
+    apiClient
+      .get("/admin/banks")
+      .then((res) => {
+        const list = (res.data?.data || []) as Bank[];
+        setBanks(list);
+      })
+      .catch((err) => console.error("Could not fetch banks", err));
   }, []);
 
-  useEffect(() => {
-    fetchBanks();
-  }, [fetchBanks]);
-
-  // ── Drag & Drop Handlers ──────────────────────────────────────────────────
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) handleFileSelected(droppedFile);
-  };
-
-  const handleFileSelected = (f: File) => {
-    const ext = f.name.split(".").pop()?.toLowerCase();
-    if (!["xlsx", "xls", "csv"].includes(ext || "")) {
-      setAnalyzeError("Only .xlsx, .xls, and .csv files are supported.");
+  const handleFileSelected = useCallback((file: File) => {
+    const validExts = [".xlsx", ".xls", ".csv"];
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!validExts.includes(ext)) {
+      setError("Please upload an Excel (.xlsx, .xls) or CSV (.csv) file.");
       return;
     }
-    if (f.size > 50 * 1024 * 1024) {
-      setAnalyzeError("File size must be less than 50MB.");
+    if (file.size > 25 * 1024 * 1024) {
+      setError("File exceeds maximum 25 MB limit.");
       return;
     }
-    setFile(f);
-    setAnalyzeError(null);
-    setAnalyzeResult(null);
-  };
+    setError(null);
+    setSelectedFile(file);
+  }, []);
 
-  // ── Phase 1: Analyze ──────────────────────────────────────────────────────
   const handleAnalyze = async () => {
-    if (!file || !selectedBankId) return;
+    if (!selectedFile) {
+      setError("Please choose an Excel file.");
+      return;
+    }
+    setError(null);
     setStep("analyzing");
-    setAnalyzeError(null);
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("bankId", selectedBankId);
-    formData.append("entityType", "PINCODE");
 
     try {
-      const res = await importApiClient.post("/import/analyze?entityType=PINCODE", formData);
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      if (selectedBankId) formData.append("bankId", selectedBankId);
+      formData.append("entityType", "PINCODE");
 
-      if (res.data.success) {
-        const result: AnalyzeResponse = res.data.data;
-        setAnalyzeResult(result);
+      const res = await importApiClient.post<{ success: boolean; data: AnalyzeResponse }>(
+        "/import/analyze?entityType=PINCODE",
+        formData
+      );
 
-        // Initialize confirmed mapping from AI suggestion
-        setConfirmedMapping({
-          pincode: result.aiMapping.mapping.pincode || "",
-          state: result.aiMapping.mapping.state || "",
-          city: result.aiMapping.mapping.city || "",
-          area: result.aiMapping.mapping.area || "",
-          serviceable: result.aiMapping.mapping.serviceable || "",
-          negative: result.aiMapping.mapping.negative || "",
-          category: result.aiMapping.mapping.category || "",
-        });
+      if (res.data?.success && res.data.data) {
+        const d = res.data.data;
+        setAnalysis(d);
 
+        const initMap: ConfirmedMapping = {
+          pincode: d.aiMapping?.mapping?.pincode || "",
+          state: d.aiMapping?.mapping?.state || "",
+          city: d.aiMapping?.mapping?.city || "",
+          area: d.aiMapping?.mapping?.area || "",
+          serviceable: d.aiMapping?.mapping?.serviceable || "",
+          negative: d.aiMapping?.mapping?.negative || "",
+          category: d.aiMapping?.mapping?.category || "",
+        };
+        setConfirmedMapping(initMap);
         setStep("mapping");
+      } else {
+        throw new Error("Invalid response format");
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "File analysis failed";
-      setAnalyzeError(msg);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Analysis failed. Ensure file structure is valid.";
+      setError(msg);
       setStep("upload");
     }
   };
 
-  // ── Phase 2: Start import ─────────────────────────────────────────────────
-  const handleConfirmImport = async () => {
-    if (!analyzeResult) return;
+  const handleExecuteImport = async () => {
+    if (!analysis) return;
     if (!confirmedMapping.pincode) {
-      setImportError("Pincode must be mapped to proceed.");
+      setError("You must map the Postal Pincode column before importing.");
       return;
     }
-    setShowConfirmModal(false);
+    setError(null);
     setStep("importing");
-    setImportError(null);
 
     try {
-      const res = await apiClient.post("/import/confirm", {
-        sessionId: analyzeResult.sessionId,
-        bankId: selectedBankId,
+      const res = await importApiClient.post<{
+        success: boolean;
+        data: { historyId?: string; importJobId?: string; status?: string; totalRecords?: number };
+      }>("/import/confirm", {
+        sessionId: analysis.sessionId,
+        bankId: selectedBankId || (banks[0]?.id ?? ""),
         importType,
         entityType: "PINCODE",
         confirmedMapping,
       });
 
-      if (res.data.success) {
-        const hId = res.data.data.historyId;
-        setHistoryId(hId);
-
-        // Start polling for progress (every 1 second for fast UI response)
-        pollRef.current = setInterval(async () => {
-          try {
-            const statusRes = await apiClient.get(`/import/status/${hId}`);
-            if (statusRes.data.success) {
-              const s: ImportStatus = statusRes.data.data;
-              setImportStatus(s);
-              if (s.status === "COMPLETED" || s.status === "FAILED") {
-                if (pollRef.current) clearInterval(pollRef.current);
-                setStep("result");
-                if (s.status === "FAILED") {
-                  setImportError(s.errorMessage || "Import failed unexpectedly.");
-                }
-              }
-            }
-          } catch (e) {
-            // Polling errors are non-fatal — keep trying
-          }
-        }, 1000);
+      if (res.data?.success && res.data.data) {
+        const jId = res.data.data.historyId || res.data.data.importJobId || "";
+        setImportSessionId(jId);
+        setImportStatus({
+          id: jId,
+          status: res.data.data.status || "PROCESSING",
+          totalRecords: res.data.data.totalRecords || analysis.validRows,
+          processedRecords: 0,
+          skippedRecords: 0,
+          failedRecords: 0,
+        });
+        setPollingActive(true);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Failed to start import";
-      setImportError(msg);
-      setStep("result");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to initiate ingestion";
+      setError(msg);
+      setStep("mapping");
     }
   };
 
-  // ── Cleanup polling on unmount ────────────────────────────────────────────
+  // Poll Ingestion Status
   useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
+    if (!pollingActive || !importSessionId) return;
 
-  // ── Reset ────────────────────────────────────────────────────────────────
+    const interval = setInterval(async () => {
+      try {
+        const res = await importApiClient.get<{ success: boolean; data: ImportStatus }>(
+          `/admin/import/status/${importSessionId}`
+        );
+        if (res.data?.success && res.data.data) {
+          const s = res.data.data;
+          setImportStatus(s);
+          if (["COMPLETED", "FAILED", "PARTIALLY_COMPLETED"].includes(s.status)) {
+            setPollingActive(false);
+            setStep("result");
+            showToast({
+              title: s.status === "COMPLETED" ? "Pincode Master Ingested!" : "Finished with Warnings",
+              type: s.status === "COMPLETED" ? "success" : "warning",
+            });
+          }
+        }
+      } catch (pollErr) {
+        console.error("Polling error", pollErr);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [pollingActive, importSessionId, showToast]);
+
   const handleReset = () => {
     setStep("upload");
-    setFile(null);
-    setAnalyzeResult(null);
-    setAnalyzeError(null);
+    setSelectedFile(null);
+    setAnalysis(null);
+    setConfirmedMapping({ pincode: "", state: "", city: "", area: "", serviceable: "", negative: "", category: "" });
+    setImportSessionId(null);
     setImportStatus(null);
-    setHistoryId(null);
-    setImportError(null);
-    setShowConfirmModal(false);
-    if (pollRef.current) clearInterval(pollRef.current);
+    setError(null);
   };
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const selectedBank = banks.find((b) => b.id === selectedBankId);
-  const isMappingReady = !!confirmedMapping.pincode;
-  const schema = analyzeResult?.schema;
-  const aiMapping = analyzeResult?.aiMapping;
-  const allColumns = schema?.columns.map((c) => c.header) || [];
-
-  // Preview rows: apply confirmed mapping to sample rows
-  const previewRows = (schema?.sampleRows || []).map((row) => ({
-    pincode: confirmedMapping.pincode ? row[confirmedMapping.pincode] || "" : "",
-    state: confirmedMapping.state ? row[confirmedMapping.state] || "" : "",
-    city: confirmedMapping.city ? row[confirmedMapping.city] || "" : "",
-    area: confirmedMapping.area ? row[confirmedMapping.area] || "" : "",
-    serviceable: confirmedMapping.serviceable ? row[confirmedMapping.serviceable] || "" : "",
-    negative: confirmedMapping.negative ? row[confirmedMapping.negative] || "" : "",
-    category: confirmedMapping.category ? row[confirmedMapping.category] || "" : "",
-  }));
-
-  const validMapped = TARGET_FIELDS.filter((f) => confirmedMapping[f.key]).length;
-  const overallStatus = !isMappingReady ? "ERROR" : (aiMapping?.warnings?.length || 0) > 0 ? "WARNING" : "READY";
-
-  const importProgress =
-    importStatus && importStatus.totalRecords > 0
-      ? Math.round((importStatus.processedRecords / importStatus.totalRecords) * 100)
-      : 0;
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* ── Page header ───────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-              <MapPin className="w-4 h-4 text-white" />
+    <div className="space-y-7 max-w-5xl mx-auto">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <MapPin className="w-4 h-4" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">Pincode Serviceability Import</h1>
-            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-              Admin Verification
-            </span>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Pincode Excel Batch Ingestion
+            </h1>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-10">
-            Automated pincode coverage spreadsheet import with column mapping verification before committing records
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Bulk ingest pan-India postal codes, serviceability flags, negative zones, and branch mappings.
           </p>
         </div>
-        <StepIndicator current={step} />
+
+        <Link href="/pincodes" className="btn-secondary h-10 px-4 text-xs font-bold self-start sm:self-auto">
+          <span>Pincode Registry</span>
+        </Link>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════
-          STEP: UPLOAD
-      ════════════════════════════════════════════════════════════════ */}
+      {/* ── Step Indicator ───────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { key: "upload", label: "1. Select Pincode File", active: step === "upload" || step === "analyzing" },
+          { key: "mapping", label: "2. Postal Schema Mapping", active: step === "mapping" },
+          { key: "result", label: "3. Ingestion Progress", active: step === "importing" || step === "result" },
+        ].map((s, idx) => (
+          <div
+            key={idx}
+            className={`p-3.5 rounded-2xl border text-center transition-all ${
+              s.active
+                ? "bg-emerald-600/10 border-emerald-500/30 text-emerald-400 font-extrabold"
+                : "bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-400 font-semibold"
+            }`}
+          >
+            <span className="text-xs">{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Error Banner ─────────────────────────────────────── */}
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} className="cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ── STEP 1: Upload ─────────────────────────────────────── */}
       {step === "upload" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Upload form */}
-          <div className="lg:col-span-7 space-y-5">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <Upload className="w-4 h-4 text-royal" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white">Upload Spreadsheet</h2>
-              </div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {/* Optional Bank Binding */}
+          <div className="glass-card p-6 rounded-3xl space-y-3">
+            <label className="text-xs font-black uppercase tracking-wider text-slate-400 block">
+              Associate with Specific Partner Bank (Optional)
+            </label>
+            <select
+              value={selectedBankId}
+              onChange={(e) => setSelectedBankId(e.target.value)}
+              className="w-full px-4 py-3 bg-white dark:bg-[#091024] border border-slate-200 dark:border-white/[0.08] rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+            >
+              <option value="" className="bg-white dark:bg-[#091024] text-slate-900 dark:text-white">
+                Global / Pan-India Master (All Lenders)
+              </option>
+              {banks.map((b) => (
+                <option key={b.id} value={b.id} className="bg-white dark:bg-[#091024] text-slate-900 dark:text-white">
+                  {b.name} ({b.code})
+                </option>
+              ))}
+            </select>
+          </div>
 
-              {analyzeError && (
-                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-extrabold text-rose-600 dark:text-rose-400 mb-1">Analysis Failed</p>
-                    <p>{analyzeError}</p>
-                  </div>
-                </div>
-              )}
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) handleFileSelected(f);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`glass-card p-12 rounded-3xl border-2 border-dashed text-center cursor-pointer transition-all space-y-4 ${
+              dragOver
+                ? "border-emerald-500 bg-emerald-500/10"
+                : selectedFile
+                ? "border-emerald-500/40 bg-emerald-500/5"
+                : "border-slate-300 dark:border-white/[0.1] hover:border-emerald-500/40"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFileSelected(f);
+              }}
+              className="hidden"
+            />
 
-              {/* Bank selector */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Building2 className="w-3 h-3" />
-                    Target Bank / NBFC *
-                  </div>
-                  <button type="button" onClick={fetchBanks} className="text-royal hover:text-royal-hover flex items-center gap-1">
-                    <RefreshCw className={`w-3 h-3 ${banks.length === 0 ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
-                </label>
-                <select
-                  value={selectedBankId}
-                  onChange={(e) => setSelectedBankId(e.target.value)}
-                  disabled={banksLoading || banks.length === 0}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-royal transition-colors disabled:opacity-60"
-                >
-                  {banks.length === 0 ? (
-                    <option value="">{banksLoading ? "Loading partner institutions..." : "No partner institutions found"}</option>
-                  ) : (
-                    banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.code}) — {b.type}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+              <MapPin className="w-8 h-8" />
+            </div>
 
-              {/* Import mode */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
-                  Import Mode *
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {(["MERGE", "REPLACE"] as const).map((mode) => (
-                    <div
-                      key={mode}
-                      onClick={() => setImportType(mode)}
-                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col gap-1.5 ${
-                        importType === mode
-                          ? mode === "MERGE"
-                            ? "border-royal bg-blue-50 dark:bg-royal/10"
-                            : "border-rose-600 bg-rose-50 dark:bg-rose-950/20"
-                          : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900"
-                      }`}
-                    >
-                      <span className={`font-extrabold text-xs ${importType === mode ? (mode === "MERGE" ? "text-royal" : "text-rose-600 dark:text-rose-400") : "text-slate-900 dark:text-white"}`}>
-                        {mode === "MERGE" ? "MERGE" : "⚠ REPLACE"} Mode
-                      </span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                        {mode === "MERGE"
-                          ? "Safely upserts records. Existing data is preserved."
-                          : "Deletes ALL existing records for this bank before importing."}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                {selectedFile ? selectedFile.name : "Drag & Drop Pincode Master Sheet"}
+              </h3>
+              <p className="text-xs text-slate-400 font-medium">
+                {selectedFile
+                  ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB — Ready for Schema Detection`
+                  : "Supports .xlsx, .xls, and .csv files up to 25 MB"}
+              </p>
+            </div>
 
-              {/* File dropzone */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
-                  Select Spreadsheet File *
-                </label>
-                <div
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
-                    isDragging
-                      ? "border-royal bg-blue-50/50 dark:bg-royal/10 scale-[1.01]"
-                      : file
-                      ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20"
-                      : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900"
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleFileSelected(f);
-                    }}
-                  />
-                  <div className="flex flex-col items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${file ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-royal/20 text-royal"}`}>
-                      {file ? <CheckCircle2 className="w-6 h-6" /> : <FileSpreadsheet className="w-6 h-6" />}
-                    </div>
-                    {file ? (
-                      <>
-                        <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{file.name}</p>
-                        <p className="text-[10px] text-slate-500">
-                          {(file.size / 1024 / 1024).toFixed(2)} MB — Click to change
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-extrabold text-slate-700 dark:text-slate-300">Drop file here or click to browse</p>
-                        <p className="text-[10px] text-slate-500 font-medium">
-                          .xlsx · .xls · .csv · Up to 50MB · 200,000 rows
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
+            {selectedFile && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full badge-emerald text-xs font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>File Loaded</span>
+              </span>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              disabled={!selectedFile}
+              onClick={handleAnalyze}
+              className="btn-primary h-12 px-8 text-sm font-bold disabled:opacity-40"
+            >
+              <Brain className="w-4 h-4" />
+              <span>Inspect Pincode Schema</span>
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── STEP 1.5: Analyzing Loading ──────────────────────── */}
+      {step === "analyzing" && (
+        <div className="py-20 text-center glass-card rounded-3xl p-8 space-y-4">
+          <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mx-auto" />
+          <h3 className="text-base font-black text-slate-900 dark:text-white">
+            Analyzing Pincode Layout...
+          </h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Detecting 6-digit postal headers, state/city taxonomy, and serviceability indicators.
+          </p>
+        </div>
+      )}
+
+      {/* ── STEP 2: Mapping ───────────────────────────────────── */}
+      {step === "mapping" && analysis && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="stat-kpi-card p-4">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Total Rows</span>
+              <span className="text-xl font-black text-slate-900 dark:text-white mt-1 block">
+                {analysis.rowCount.toLocaleString()}
+              </span>
+            </div>
+            <div className="stat-kpi-card p-4">
+              <span className="text-[10px] uppercase font-bold text-emerald-400">Valid Pincodes</span>
+              <span className="text-xl font-black text-emerald-400 mt-1 block">
+                {analysis.validRows.toLocaleString()}
+              </span>
+            </div>
+            <div className="stat-kpi-card p-4">
+              <span className="text-[10px] uppercase font-bold text-amber-400">Duplicates</span>
+              <span className="text-xl font-black text-amber-400 mt-1 block">
+                {analysis.fileDuplicates.toLocaleString()}
+              </span>
+            </div>
+            <div className="stat-kpi-card p-4">
+              <span className="text-[10px] uppercase font-bold text-blue-400">Columns</span>
+              <span className="text-xl font-black text-blue-400 mt-1 block">
+                {analysis.schema.columnCount}
+              </span>
+            </div>
+          </div>
+
+          <div className="glass-card p-6 rounded-3xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  Pincode Column Mappings
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  Confirm target fields for postal database insertion
+                </p>
               </div>
 
               <button
-                onClick={handleAnalyze}
-                disabled={!file || !selectedBankId}
-                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="btn-secondary h-9 px-3 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               >
-                <MapPin className="w-4 h-4" />
-                Parse &amp; Analyze Schema
-                <ArrowRight className="w-4 h-4" />
+                <Eye className="w-3.5 h-3.5" />
+                <span>{showPreview ? "Hide Sample Rows" : "View Sample Rows"}</span>
               </button>
             </div>
-          </div>
 
-          {/* Right: Info panel */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Security notice */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md space-y-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Security Guarantees</h3>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { icon: "🤖", text: "AI sees only column headers and 5 sample rows — not the full file" },
-                  { icon: "🔒", text: "AI cannot access the database or execute any commands" },
-                  { icon: "👁️", text: "Preview is read-only — no editing before import" },
-                  { icon: "✋", text: "Admin must explicitly confirm before any data is written" },
-                  { icon: "📋", text: "Every import creates a permanent audit log entry" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-2 text-[10px] text-slate-600 dark:text-slate-400 font-medium">
-                    <span className="text-xs mt-0">{item.icon}</span>
-                    <span>{item.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Supported formats */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Supported Formats</h3>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { bank: "ICICI", cols: "Pincode, City, State, Serviceable (Yes/No)" },
-                  { bank: "ABFL", cols: "Zip, Region, Category" },
-                  { bank: "HDFC", cols: "Postal Code, Negative Area Flag" },
-                  { bank: "Generic CSV", cols: "Any pincode list with headers" },
-                ].map((f, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-royal mt-1.5 shrink-0" />
-                    <div className="text-[10px]">
-                      <span className="font-black text-slate-700 dark:text-slate-300">{f.bank}:</span>{" "}
-                      <span className="text-slate-500">{f.cols}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* How it works */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md space-y-3">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">How It Works</h3>
-              </div>
-              {["Upload your file", "AI maps column headers", "You review & adjust mapping", "Confirm to import to production"].map((step, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[9px] font-black text-slate-600 dark:text-slate-400 shrink-0">{i + 1}</div>
-                  <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">{step}</span>
+            {/* ── Sample Rows Preview Table ───────────────────────── */}
+            {showPreview && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+                  <span className="font-semibold">
+                    Showing first {analysis.schema.sampleRows?.length || 0} sample rows from {analysis.rowCount.toLocaleString()} total rows:
+                  </span>
+                  <span className="text-[11px] font-mono">
+                    {analysis.schema.columns.length} columns detected
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ════════════════════════════════════════════════════════════════
-          STEP: ANALYZING
-      ════════════════════════════════════════════════════════════════ */}
-      {step === "analyzing" && (
-        <div className="flex flex-col items-center justify-center py-20 space-y-6 max-w-md mx-auto text-center">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <MapPin className="w-8 h-8 animate-pulse" />
-          </div>
-          <div className="space-y-2">
-            <p className="text-base font-bold text-slate-900 dark:text-white">Analyzing Pincode Dataset</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Parsing geographic columns, validating postal digits, and building field mapping preview.
-            </p>
-            {file && (
-              <p className="text-xs text-slate-500 font-mono">
-                {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
-              </p>
+                <div className="overflow-x-auto max-h-64 rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-slate-50/80 dark:bg-[#050b18]/80 shadow-inner">
+                  <table className="admin-table text-xs w-full">
+                    <thead className="bg-slate-100 dark:bg-white/[0.06] sticky top-0 z-10 backdrop-blur-sm">
+                      <tr>
+                        <th className="w-12 text-center text-slate-400 text-[10px] font-mono">#</th>
+                        {analysis.schema.columns.map((c) => {
+                          // Check if this column is mapped to any target field
+                          const mappedTarget = TARGET_FIELDS.find(
+                            (tf) => confirmedMapping[tf.key] === c.header
+                          );
+                          return (
+                            <th key={c.index} className="whitespace-nowrap text-left px-3 py-2.5">
+                              <div className="font-bold text-slate-900 dark:text-white">
+                                {c.header}
+                              </div>
+                              {mappedTarget ? (
+                                <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                                  Mapped: {mappedTarget.label}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  {c.fillRate}% filled
+                                </span>
+                              )}
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                      {(!analysis.schema.sampleRows || analysis.schema.sampleRows.length === 0) ? (
+                        <tr>
+                          <td colSpan={analysis.schema.columns.length + 1} className="py-8 text-center text-xs text-slate-400">
+                            No preview rows available in uploaded spreadsheet.
+                          </td>
+                        </tr>
+                      ) : (
+                        analysis.schema.sampleRows.slice(0, 10).map((row, i) => (
+                          <tr key={i} className="hover:bg-blue-500/[0.03] transition-colors">
+                            <td className="text-center text-slate-400 font-mono text-[10px] py-2">
+                              {i + 1}
+                            </td>
+                            {analysis.schema.columns.map((c) => {
+                              const val = row[c.header];
+                              const isMapped = Boolean(
+                                Object.values(confirmedMapping).includes(c.header)
+                              );
+                              return (
+                                <td
+                                  key={c.index}
+                                  className={`px-3 py-2 text-[11px] font-mono whitespace-nowrap ${
+                                    isMapped
+                                      ? "text-slate-900 dark:text-slate-100 font-bold"
+                                      : "text-slate-500 dark:text-slate-400"
+                                  }`}
+                                >
+                                  {val !== undefined && val !== null && String(val).trim() !== ""
+                                    ? String(val)
+                                    : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
             )}
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-slate-600 dark:text-slate-400 font-medium bg-white dark:bg-slate-900 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
-            Validating dataset rows...
-          </div>
-        </div>
-      )}
 
-      {/* ════════════════════════════════════════════════════════════════
-          STEP: MAPPING
-      ════════════════════════════════════════════════════════════════ */}
-      {step === "mapping" && analyzeResult && schema && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* ── LEFT: Mapping panel ─────────────────────────────────── */}
-            <div className="lg:col-span-5 space-y-4">
-              {/* File info card */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md space-y-3">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">File Analysis</h3>
-                  {aiMapping?.usedFallback && (
-                    <span className="ml-auto px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      Rule-Based
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "File", value: schema.fileName.length > 24 ? schema.fileName.substring(0, 24) + "…" : schema.fileName },
-                    { label: "Sheet", value: schema.sheetName },
-                    { label: "Total Rows", value: analyzeResult.rowCount.toLocaleString() },
-                    { label: "Columns", value: schema.columnCount },
-                    { label: "Valid Rows", value: analyzeResult.validRows.toLocaleString() },
-                    { label: "Duplicates (file)", value: analyzeResult.fileDuplicates.toLocaleString() },
-                  ].map((item) => (
-                    <div key={item.label} className="bg-slate-50 dark:bg-slate-950/80 rounded-xl p-2.5 border border-slate-100 dark:border-transparent">
-                      <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{item.label}</p>
-                      <p className="text-xs font-extrabold text-slate-900 dark:text-white mt-0.5 truncate">{item.value}</p>
+            {/* Field Map Selectors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {TARGET_FIELDS.map((tf) => {
+                const mappedCol = confirmedMapping[tf.key];
+                const conf = analysis.aiMapping.confidence[tf.key] || 0;
+
+                return (
+                  <div
+                    key={tf.key}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>{tf.icon}</span>
+                        <span>{tf.label}</span>
+                        {tf.required && <strong className="text-rose-400 font-bold">*</strong>}
+                      </span>
+                      {mappedCol && conf > 0 && (
+                        <span className={`text-[10px] font-black ${confidenceColor(conf)}`}>
+                          {conf}% Match
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* AI Mapping */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md space-y-4">
-                <div className="flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Column Mapping</h3>
-                </div>
-
-                {aiMapping?.usedFallback && (
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 flex items-start gap-2">
-                    <TriangleAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
-                      AI unavailable — rule-based mapping applied. Please verify each column below.
-                    </p>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {TARGET_FIELDS.map((field) => {
-                    const suggestedCol = confirmedMapping[field.key];
-                    const conf = aiMapping?.confidence?.[field.key] ?? 0;
-                    const needsReview = conf < 75 && conf > 0;
-                    const notMapped = !suggestedCol;
-
-                    return (
-                      <div
-                        key={field.key}
-                        className={`p-3 rounded-xl border space-y-2 transition-all ${
-                          notMapped && field.required
-                            ? "border-rose-200 dark:border-rose-700/60 bg-rose-50 dark:bg-rose-950/20"
-                            : notMapped
-                            ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60"
-                            : needsReview
-                            ? "border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-950/10"
-                            : "border-emerald-200 dark:border-emerald-700/30 bg-emerald-50 dark:bg-emerald-950/10"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs">{field.icon}</span>
-                            <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                              {field.label}
-                            </span>
-                            {field.required && (
-                              <span className="text-rose-500 text-[10px] font-black">*</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {needsReview && suggestedCol && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                NEEDS REVIEW
-                              </span>
-                            )}
-                            {notMapped && field.required && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                                REQUIRED
-                              </span>
-                            )}
-                            {suggestedCol && conf > 0 && (
-                              <span className={`text-[9px] font-black ${confidenceColor(conf)}`}>
-                                {conf}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Confidence bar */}
-                        {suggestedCol && conf > 0 && (
-                          <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-0.5">
-                            <div
-                              className={`h-full rounded-full transition-all ${confidenceBg(conf)}`}
-                              style={{ width: `${conf}%` }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Column selector dropdown */}
-                        <select
-                          value={confirmedMapping[field.key]}
-                          onChange={(e) =>
-                            setConfirmedMapping((prev) => ({ ...prev, [field.key]: e.target.value }))
-                          }
-                          className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-[10px] font-semibold focus:outline-none focus:border-royal transition-colors"
+                    <select
+                      value={mappedCol || ""}
+                      onChange={(e) =>
+                        setConfirmedMapping((prev) => ({ ...prev, [tf.key]: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 bg-white dark:bg-[#091024] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                    >
+                      <option value="" className="bg-white dark:bg-[#091024] text-slate-900 dark:text-white">
+                        -- Skip Field --
+                      </option>
+                      {analysis.schema.columns.map((c) => (
+                        <option
+                          key={c.index}
+                          value={c.header}
+                          className="bg-white dark:bg-[#091024] text-slate-900 dark:text-white"
                         >
-                          <option value="">— Not mapped —</option>
-                          {allColumns.map((col) => (
-                            <option key={col} value={col}>
-                              {col}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Warnings */}
-              {(aiMapping?.warnings?.length || 0) > 0 && (
-                <div className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-800/40 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <TriangleAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                    <h4 className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Warnings</h4>
+                          {c.header} ({c.fillRate}% filled)
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <ul className="space-y-1">
-                    {aiMapping!.warnings.map((w, i) => (
-                      <li key={i} className="text-[10px] text-amber-800 dark:text-amber-300/80 font-medium flex items-start gap-1.5">
-                        <span className="text-amber-500 mt-0.5">•</span>
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Start Over
-                </button>
-                <button
-                  onClick={() => setShowConfirmModal(true)}
-                  disabled={!isMappingReady}
-                  className="flex-1 h-10 rounded-xl bg-royal hover:bg-royal-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs shadow-lg shadow-royal/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  Review &amp; Import
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                );
+              })}
             </div>
 
-            {/* ── RIGHT: Read-only Preview ───────────────────────────── */}
-            <div className="lg:col-span-7">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-md overflow-hidden h-full flex flex-col">
-                {/* Preview header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                    <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                      Import Preview
-                    </h3>
-                    <span className="px-2 py-0.5 rounded text-[8px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
-                      READ-ONLY
-                    </span>
-                  </div>
-                  {/* Status badge */}
+            {/* ── Ingestion Strategy (MERGE vs REPLACE) ── */}
+            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] space-y-3">
+              <div>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                  Ingestion Strategy
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  Choose how new postal records interact with existing pincode database tables.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setImportType("MERGE")}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                    importType === "MERGE"
+                      ? "border-emerald-600 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm ring-1 ring-emerald-500/30"
+                      : "border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/[0.15]"
+                  }`}
+                >
                   <div
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black border ${
-                      overallStatus === "READY"
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                        : overallStatus === "WARNING"
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                        : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                    className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                      importType === "MERGE"
+                        ? "border-emerald-600 bg-emerald-600"
+                        : "border-slate-400 dark:border-slate-600"
                     }`}
                   >
-                    {overallStatus === "READY" ? (
-                      <CheckCircle2 className="w-3 h-3" />
-                    ) : overallStatus === "WARNING" ? (
-                      <TriangleAlert className="w-3 h-3" />
-                    ) : (
-                      <AlertCircle className="w-3 h-3" />
-                    )}
-                    {overallStatus}
+                    {importType === "MERGE" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
-                </div>
-
-                {/* Stats row */}
-                <div className="grid grid-cols-4 divide-x divide-slate-200 dark:divide-slate-800 border-b border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-transparent">
-                  {[
-                    { label: "Total Rows", value: analyzeResult.rowCount.toLocaleString(), color: "text-slate-900 dark:text-white" },
-                    { label: "Valid", value: analyzeResult.validRows.toLocaleString(), color: "text-emerald-600 dark:text-emerald-400" },
-                    { label: "Invalid", value: analyzeResult.invalidRows.toLocaleString(), color: "text-rose-600 dark:text-rose-400" },
-                    { label: "Duplicates", value: analyzeResult.fileDuplicates.toLocaleString(), color: "text-amber-600 dark:text-amber-400" },
-                  ].map((stat) => (
-                    <div key={stat.label} className="px-4 py-3 text-center">
-                      <p className={`text-base font-black ${stat.color}`}>{stat.value}</p>
-                      <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
-                        {stat.label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Mapped columns summary */}
-                <div className="px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">
-                    Mapped:
-                  </span>
-                  {TARGET_FIELDS.map((field) => (
-                    <span
-                      key={field.key}
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        confirmedMapping[field.key]
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                          : field.required
-                          ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700"
-                      }`}
-                    >
-                      {field.label} {confirmedMapping[field.key] ? "✓" : "—"}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Sample data table — read-only */}
-                {!isMappingReady ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-16 text-center px-6">
-                    <AlertCircle className="w-10 h-10 text-rose-500/40 mb-3" />
-                    <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Pincode column not mapped</p>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Select the correct column for Pincode to see the preview
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-[10px] border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-                          <th className="px-4 py-2.5 text-slate-500 font-black uppercase tracking-wider whitespace-nowrap">#</th>
-                          {TARGET_FIELDS.filter((f) => confirmedMapping[f.key]).map((f) => (
-                            <th
-                              key={f.key}
-                              className="px-4 py-2.5 text-slate-600 dark:text-slate-400 font-black uppercase tracking-wider whitespace-nowrap"
-                            >
-                              <div className="flex items-center gap-1">
-                                <span>{f.icon}</span>
-                                {f.label}
-                              </div>
-                              <div className="text-[8px] text-slate-400 dark:text-slate-600 font-semibold normal-case tracking-normal mt-0.5">
-                                ← {confirmedMapping[f.key]}
-                              </div>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewRows.length === 0 ? (
-                          <tr>
-                            <td colSpan={99} className="text-center py-8 text-slate-500 font-semibold">
-                              No sample rows available
-                            </td>
-                          </tr>
-                        ) : (
-                          previewRows.map((row, i) => (
-                            <tr
-                              key={i}
-                              className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
-                            >
-                              <td className="px-4 py-2.5 text-slate-500 dark:text-slate-600 font-mono">{i + 1}</td>
-                              {TARGET_FIELDS.filter((f) => confirmedMapping[f.key]).map((f) => (
-                                <td key={f.key} className="px-4 py-2.5 font-medium text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={row[f.key]}>
-                                  {row[f.key] || <span className="text-slate-300 dark:text-slate-700 italic">—</span>}
-                                </td>
-                              ))}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                    <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-                      <p className="text-[9px] text-slate-500 font-medium">
-                        Showing {Math.min(previewRows.length, 10)} sample rows of {analyzeResult.rowCount.toLocaleString()} total · Read-only preview
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Confirm Import Modal ──────────────────────────────────── */}
-          {showConfirmModal && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-md space-y-6 p-6 sm:p-8 animate-slow-fade">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Import Summary</h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Review before writing to production database</p>
-                  </div>
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Summary stats */}
-                <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 space-y-3 border border-slate-100 dark:border-slate-800">
-                  {[
-                    { label: "File", value: schema.fileName },
-                    { label: "Bank", value: selectedBank?.name || "—" },
-                    { label: "Mode", value: importType, highlight: importType === "REPLACE" ? "rose" : "blue" },
-                    { label: "Total Rows", value: analyzeResult.rowCount.toLocaleString() },
-                    { label: "Valid Rows", value: analyzeResult.validRows.toLocaleString(), color: "text-emerald-600 dark:text-emerald-400" },
-                    { label: "Invalid / Skip", value: (analyzeResult.invalidRows + analyzeResult.fileDuplicates).toLocaleString(), color: "text-amber-600 dark:text-amber-400" },
-                    { label: "Mapped Columns", value: `${validMapped} / ${TARGET_FIELDS.length}` },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500 font-semibold">{item.label}</span>
-                      <span className={`text-[10px] font-black ${(item as any).color || "text-slate-900 dark:text-white"} max-w-[200px] truncate text-right`}>
-                        {item.value}
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>Merge &amp; Update (Incremental)</span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-md font-extrabold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                        Default
                       </span>
                     </div>
-                  ))}
-                </div>
-
-                {/* Warning */}
-                <div className={`p-4 rounded-xl border flex items-start gap-2 ${importType === "REPLACE" ? "bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-700" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-700/50"}`}>
-                  <TriangleAlert className={`w-4 h-4 shrink-0 mt-0.5 ${importType === "REPLACE" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`} />
-                  <div>
-                    <p className={`text-xs font-black mb-1 ${importType === "REPLACE" ? "text-rose-700 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"}`}>
-                      {importType === "REPLACE" ? "⚠ REPLACE MODE — All existing records will be deleted" : "This will modify PRODUCTION data"}
-                    </p>
-                    <p className={`text-[10px] font-medium ${importType === "REPLACE" ? "text-rose-600/90 dark:text-rose-300/70" : "text-amber-700/90 dark:text-amber-300/70"}`}>
-                      {importType === "REPLACE"
-                        ? `All existing ${selectedBank?.name} pincodes will be permanently deleted before importing.`
-                        : "Valid records will be upserted. Existing records that match will be updated."}
-                    </p>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
+                      Upsert newly discovered pincodes and update serviceability flags without deleting existing records.
+                    </div>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-transparent text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 text-xs font-bold transition-colors cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setImportType("REPLACE")}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                    importType === "REPLACE"
+                      ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-sm ring-1 ring-amber-500/30"
+                      : "border-slate-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/[0.15]"
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full border mt-0.5 shrink-0 flex items-center justify-center ${
+                      importType === "REPLACE"
+                        ? "border-amber-500 bg-amber-500"
+                        : "border-slate-400 dark:border-slate-600"
+                    }`}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmImport}
-                    className="flex-1 h-11 rounded-xl bg-royal hover:bg-royal-hover text-white font-black text-xs shadow-lg shadow-royal/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Database className="w-3.5 h-3.5" />
-                    Import Valid Records
-                  </button>
-                </div>
+                    {importType === "REPLACE" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>Full Replacement (Wipe &amp; Replace)</span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-md font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                        Destructive
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
+                      Wipes existing serviceable pincodes for this bank and replaces with this fresh upload.
+                    </div>
+                  </div>
+                </button>
               </div>
             </div>
-          )}
-        </>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════
-          STEP: IMPORTING (Progress)
-      ════════════════════════════════════════════════════════════════ */}
-      {step === "importing" && (
-        <div className="flex flex-col items-center justify-center py-20 space-y-10">
-          {/* Stage indicators */}
-          <div className="flex items-center gap-2">
-            {["Validating", "Normalizing", "Importing", "Completing"].map((stage, i) => (
-              <div key={stage} className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-royal/10 dark:bg-royal/20 border border-royal/20 dark:border-royal/30 text-[10px] font-black text-royal">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {stage}
-                </div>
-                {i < 3 && <ChevronRight className="w-3 h-3 text-slate-300 dark:text-slate-700" />}
-              </div>
-            ))}
           </div>
 
-          {/* Progress card */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 sm:p-10 w-full max-w-lg space-y-6 text-center shadow-sm dark:shadow-2xl">
-            <div>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mb-1">
-                {importStatus ? `${importProgress}%` : "Starting…"}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                {selectedBank?.name} · {file?.name}
-              </p>
-            </div>
+          <div className="flex justify-between">
+            <button onClick={handleReset} className="btn-secondary h-12 px-6 text-xs font-bold">
+              Choose Another File
+            </button>
+            <button
+              onClick={handleExecuteImport}
+              className="btn-primary h-12 px-8 text-sm font-bold"
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Start Ingesting Pincodes</span>
+            </button>
+          </div>
+        </motion.div>
+      )}
 
-            {/* Progress bar */}
-            <div className="space-y-2">
-              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+      {/* ── STEP 3: Ingesting ─────────────────────────────────── */}
+      {step === "importing" && (
+        <div className="py-16 text-center glass-card rounded-3xl p-8 space-y-6">
+          <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              Indexing Pan-India Postal Zones...
+            </h3>
+            <p className="text-xs text-slate-400 font-medium">
+              Updating geospatial bounds and serviceability tables.
+            </p>
+          </div>
+
+          {importStatus && (
+            <div className="max-w-md mx-auto space-y-2">
+              <div className="w-full bg-slate-200 dark:bg-white/[0.08] h-3 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-royal to-blue-400 rounded-full transition-all duration-700"
-                  style={{ width: `${importStatus ? importProgress : 5}%` }}
+                  className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${
+                      importStatus.totalRecords
+                        ? Math.min(
+                            100,
+                            Math.round((importStatus.processedRecords / importStatus.totalRecords) * 100)
+                          )
+                        : 0
+                    }%`,
+                  }}
                 />
               </div>
-              {importStatus && (
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  {importStatus.processedRecords.toLocaleString()} / {importStatus.totalRecords.toLocaleString()} rows
-                </p>
-              )}
-            </div>
-
-            {importStatus && (
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Imported", value: importStatus.processedRecords, color: "text-emerald-600 dark:text-emerald-400" },
-                  { label: "Skipped", value: importStatus.skippedRecords ?? 0, color: "text-amber-600 dark:text-amber-400" },
-                  { label: "Failed", value: importStatus.failedRecords, color: "text-rose-600 dark:text-rose-400" },
-                ].map((s) => (
-                  <div key={s.label} className="bg-slate-50 dark:bg-slate-950 rounded-xl p-3 border border-slate-100 dark:border-transparent">
-                    <p className={`text-lg font-black ${s.color}`}>{s.value.toLocaleString()}</p>
-                    <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">{s.label}</p>
-                  </div>
-                ))}
+              <div className="flex justify-between text-xs font-mono font-bold text-slate-400">
+                <span>{importStatus.processedRecords} Indexed</span>
+                <span>{importStatus.totalRecords} Total Records</span>
               </div>
-            )}
-
-            <p className="text-[10px] text-slate-500 dark:text-slate-600 font-medium">
-              Do not close this tab. Large files may take several minutes.
-            </p>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════
-          STEP: RESULT
-      ════════════════════════════════════════════════════════════════ */}
-      {step === "result" && (
-        <div className="flex flex-col items-center justify-center py-16 space-y-6 max-w-2xl mx-auto w-full">
-          {/* Success / Failure header */}
-          <div
-            className={`w-20 h-20 rounded-2xl flex items-center justify-center ${
-              importError || importStatus?.status === "FAILED"
-                ? "bg-rose-500/20"
-                : "bg-emerald-500/20"
-            }`}
-          >
-            {importError || importStatus?.status === "FAILED" ? (
-              <AlertCircle className="w-10 h-10 text-rose-600 dark:text-rose-400" />
-            ) : (
-              <BadgeCheck className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
-            )}
+      {/* ── STEP 4: Result ────────────────────────────────────── */}
+      {step === "result" && importStatus && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card rounded-3xl p-8 text-center space-y-6"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
           </div>
 
-          <div className="text-center">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-1">
-              {importError || importStatus?.status === "FAILED" ? "Import Failed" : "Import Complete"}
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">
+              Pincodes Ingested Successfully
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {importError || importStatus?.errorMessage
-                ? importError || importStatus?.errorMessage
-                : `Successfully processed ${importStatus?.totalRecords?.toLocaleString() || 0} rows for ${selectedBank?.name}`}
+            <p className="text-xs text-slate-400 font-medium">
+              Serviceability and coverage matrix updated across the platform.
             </p>
           </div>
 
-          {/* Result stats */}
-          {importStatus && (
-            <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-md overflow-hidden">
-              <div className="grid grid-cols-4 divide-x divide-slate-200 dark:divide-slate-800">
-                {[
-                  { label: "Total", value: importStatus.totalRecords, color: "text-slate-900 dark:text-white" },
-                  { label: "Imported", value: importStatus.processedRecords, color: "text-emerald-600 dark:text-emerald-400" },
-                  { label: "Skipped", value: importStatus.skippedRecords ?? 0, color: "text-amber-600 dark:text-amber-400" },
-                  { label: "Failed", value: importStatus.failedRecords, color: "text-rose-600 dark:text-rose-400" },
-                ].map((s) => (
-                  <div key={s.label} className="px-4 py-5 text-center">
-                    <p className={`text-xl font-black ${s.color}`}>{s.value?.toLocaleString() ?? 0}</p>
-                    <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider mt-1">{s.label}</p>
-                  </div>
-                ))}
-              </div>
+          <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <span className="text-[10px] font-extrabold uppercase block">Processed</span>
+              <span className="text-2xl font-black mt-1 block">
+                {importStatus.processedRecords.toLocaleString()}
+              </span>
             </div>
-          )}
-
-          {/* Audit notice */}
-          {!importError && (
-            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500/60" />
-              Audit log recorded · Import ID: {historyId?.substring(0, 16)}…
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <span className="text-[10px] font-extrabold uppercase block">Skipped</span>
+              <span className="text-2xl font-black mt-1 block">
+                {importStatus.skippedRecords.toLocaleString()}
+              </span>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-4">
-            <button
-              onClick={handleReset}
-              className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-transparent text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 text-xs font-bold transition-colors cursor-pointer flex items-center gap-2 shadow-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              New Import
-            </button>
-            <a
-              href="/import-history"
-              className="px-6 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-colors flex items-center gap-2 shadow-sm"
-            >
-              View Import History
-              <ArrowRight className="w-3.5 h-3.5" />
-            </a>
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+              <span className="text-[10px] font-extrabold uppercase block">Failed</span>
+              <span className="text-2xl font-black mt-1 block">
+                {importStatus.failedRecords.toLocaleString()}
+              </span>
+            </div>
           </div>
-        </div>
+
+          <div className="flex justify-center gap-3 pt-4 border-t border-slate-100 dark:border-white/[0.08]">
+            <button onClick={handleReset} className="btn-secondary h-11 px-6 text-xs font-bold">
+              Upload Another Pincode Sheet
+            </button>
+            <Link href="/pincodes" className="btn-primary h-11 px-6 text-xs font-bold">
+              <span>View Pincode Registry</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </motion.div>
       )}
-    </main>
+    </div>
   );
 }

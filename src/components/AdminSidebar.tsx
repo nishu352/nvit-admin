@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo } from "react";
+import React, { useState, useMemo, memo, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Building2,
@@ -32,28 +33,36 @@ import {
   Sparkles,
   Sliders,
   Activity,
+  MessageSquareText,
+  PanelLeftClose,
+  PanelLeft,
+  FileCheck,
 } from "lucide-react";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface SidebarItem {
   name: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
+  badge?: string;
 }
 
 interface SidebarSection {
   title: string;
   id: string;
-  icon: any;
+  icon: LucideIcon | React.FC<React.SVGProps<SVGSVGElement>>;
   items: SidebarItem[];
 }
 
 interface AdminSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-// Helper component for Master Management icon defined statically outside component to ensure stable identity
-function DatabaseIcon(props: any) {
+// ── Custom SVG icon for Database ──────────────────────────────────────────────
+function DatabaseIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -72,7 +81,7 @@ function DatabaseIcon(props: any) {
   );
 }
 
-// Static definition of sidebar sections to prevent re-creation on every render
+// ── Static sidebar sections ───────────────────────────────────────────────────
 const STATIC_SECTIONS: SidebarSection[] = [
   {
     title: "MASTER MANAGEMENT",
@@ -99,13 +108,14 @@ const STATIC_SECTIONS: SidebarSection[] = [
     ],
   },
   {
-    title: "CRM",
+    title: "CRM & INQUIRIES",
     id: "crm",
     icon: UserSquare2,
     items: [
-      { name: "Lead Management", href: "/crm/leads", icon: GitPullRequest },
-      { name: "Customer Management", href: "/crm/customers", icon: UserCheck },
-      { name: "Executives", href: "/executives", icon: UserSquare2 },
+      { name: "Lead Pipeline", href: "/crm/leads", icon: GitPullRequest },
+      { name: "Customers Registry", href: "/crm/customers", icon: UserCheck },
+      { name: "Loan Applications", href: "/applications", icon: FileCheck },
+      { name: "Field Executives", href: "/executives", icon: UserSquare2 },
     ],
   },
   {
@@ -113,28 +123,36 @@ const STATIC_SECTIONS: SidebarSection[] = [
     id: "cms",
     icon: Globe,
     items: [
-      { name: "CMS Live Config", href: "/cms", icon: Layout },
+      { name: "Live Site Editor", href: "/cms", icon: Layout },
     ],
   },
   {
-    title: "MARKETING",
+    title: "MARKETING & ADS",
     id: "marketing",
     icon: Megaphone,
     items: [
-      { name: "Marketing Integrations", href: "/marketing", icon: Target },
+      { name: "Ad Conversions & SEO", href: "/marketing", icon: Target },
     ],
   },
   {
-    title: "USERS & SECURITY",
+    title: "SECURITY & LOGS",
     id: "security",
     icon: Shield,
     items: [
-      { name: "Security Users", href: "/security/users", icon: User },
-      { name: "Compliance Audit Logs", href: "/audit-logs", icon: ShieldAlert },
+      { name: "Admin Users & Keys", href: "/security/users", icon: User },
+      { name: "Forensic Audit Trail", href: "/audit-logs", icon: ShieldAlert },
     ],
   },
   {
-    title: "SYSTEM & INFRASTRUCTURE",
+    title: "SUPPORT & TICKETS",
+    id: "support",
+    icon: MessageSquareText,
+    items: [
+      { name: "Feedback & Grievances", href: "/feedback", icon: MessageSquareText },
+    ],
+  },
+  {
+    title: "INFRASTRUCTURE",
     id: "system",
     icon: Sliders,
     items: [
@@ -144,11 +162,16 @@ const STATIC_SECTIONS: SidebarSection[] = [
   },
 ];
 
-function AdminSidebarComponent({ isMobile, onClose }: AdminSidebarProps) {
+// ── Sidebar Component ─────────────────────────────────────────────────────────
+function AdminSidebarComponent({
+  isMobile,
+  onClose,
+  collapsed = false,
+  onToggleCollapse,
+}: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
-  // Initialize expanded sections with the currently active section already open
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
       master: false,
@@ -156,214 +179,267 @@ function AdminSidebarComponent({ isMobile, onClose }: AdminSidebarProps) {
       crm: false,
       cms: false,
       marketing: false,
+      support: false,
       security: false,
       system: false,
     };
     for (const sec of STATIC_SECTIONS) {
-      if (sec.items.some((item) => pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href)))) {
+      if (
+        sec.items.some(
+          (item) =>
+            pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+        )
+      ) {
         initial[sec.id] = true;
       }
     }
     return initial;
   });
 
-  // Dynamically filter sections based on role with stable reference
+  // Role-based visible sections
   const visibleSections = useMemo(() => {
     return STATIC_SECTIONS
       .filter((sec) => {
         if (!user) return false;
-        if (user.role === "EXECUTIVE") {
-          return sec.id === "crm";
-        }
-        if (user.role === "VIEWER") {
-          return sec.id === "master" || sec.id === "crm";
-        }
-        if (user.role === "MANAGER") {
-          return sec.id === "master" || sec.id === "data" || sec.id === "crm";
-        }
+        if (user.role === "EXECUTIVE") return sec.id === "crm";
+        if (user.role === "VIEWER") return sec.id === "master" || sec.id === "crm";
+        if (user.role === "MANAGER") return ["master", "data", "crm"].includes(sec.id);
         return true;
       })
       .map((sec) => {
         let items = sec.items;
-        // Hide Executives list from EXECUTIVE & VIEWER roles
         if (user?.role === "EXECUTIVE" || user?.role === "VIEWER") {
           items = items.filter((item) => item.href !== "/executives");
         }
         return { ...sec, items };
       });
-  }, [user?.role]);
+  }, [user]);
 
-  // Ensure active section is expanded upon navigation without resetting other user-expanded sections
-  useEffect(() => {
+  // Auto-expand active section during render when pathname changes
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     const activeSection = visibleSections.find((sec) =>
-      sec.items.some((item) => pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href)))
+      sec.items.some(
+        (item) =>
+          pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+      )
     );
-    if (activeSection) {
-      setExpandedSections((prev) => {
-        if (prev[activeSection.id]) return prev;
-        return { ...prev, [activeSection.id]: true };
-      });
+    if (activeSection && !expandedSections[activeSection.id]) {
+      setExpandedSections((prev) => ({ ...prev, [activeSection.id]: true }));
     }
-  }, [pathname, visibleSections]);
+  }
 
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [sectionId]: !prev[sectionId],
-    }));
-  };
+  const toggleSection = useCallback((sectionId: string) => {
+    setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }, []);
 
-  const handleLinkClick = () => {
-    if (isMobile && onClose) {
-      onClose();
-    }
-  };
+  const handleLinkClick = useCallback(() => {
+    if (isMobile && onClose) onClose();
+  }, [isMobile, onClose]);
+
+  const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "A";
 
   return (
-    <aside className="w-full h-full bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 flex flex-col justify-between border-r border-slate-200 dark:border-slate-900 overflow-y-auto select-none">
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Brand Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-900 flex items-center justify-between shrink-0 select-none">
-          <div className="flex items-center space-x-3">
-            <img
-              src="/brand/nvit-icon-animated.svg"
-              alt="NVIT.SPACE"
-              className="nvit-logo w-8 h-8 sm:w-9 sm:h-9 shrink-0"
-              width="36"
-              height="36"
-            />
-            <div>
-              <h2 className="text-slate-900 dark:text-white text-[16px] sm:text-[17px] tracking-tight flex items-center">
-                <span className="font-semibold">NVIT</span>
-                <span className="text-blue-600 dark:text-blue-500 font-semibold">.</span>
-                <span className="font-light">SPACE</span>
+    <aside
+      className={`h-full flex flex-col bg-white dark:bg-[#060c1c] border-r border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-slate-300 overflow-hidden select-none transition-all duration-250 ${
+        collapsed && !isMobile ? "w-16" : "w-64"
+      }`}
+    >
+      {/* ── Brand Header ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 h-16 border-b border-slate-100 dark:border-white/[0.08] shrink-0">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-[1px] shadow-md shadow-blue-500/20 shrink-0 flex items-center justify-center">
+            <div className="w-full h-full bg-[#060c1c] rounded-xl flex items-center justify-center">
+              <img
+                src="/brand/nvit-icon-animated.svg"
+                alt="NVIT.SPACE"
+                className="nvit-logo w-5 h-5 shrink-0"
+                width="20"
+                height="20"
+              />
+            </div>
+          </div>
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <h2 className="text-[15px] leading-tight tracking-tight flex items-center">
+                <span className="font-extrabold text-slate-900 dark:text-white">NVIT</span>
+                <span className="text-blue-500 font-black">.</span>
+                <span className="font-light tracking-wide text-slate-600 dark:text-slate-400">SPACE</span>
               </h2>
-              <span className="text-[9px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold block mt-[2px]">
+              <span className="text-[8px] uppercase tracking-[0.2em] text-emerald-400 font-bold block">
                 Enterprise Admin
               </span>
             </div>
-          </div>
-
-          {/* Close button on mobile */}
-          {isMobile && onClose && (
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-              aria-label="Close navigation"
-            >
-              <X className="w-5 h-5" />
-            </button>
           )}
         </div>
 
-        {/* User Card */}
-        <div className="p-3.5 mx-3 my-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-900 flex items-center space-x-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs border border-blue-500/20 shrink-0">
-            {user?.name ? user.name.charAt(0) : "A"}
-          </div>
-          <div className="truncate min-w-0">
-            <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || "Admin User"}</h4>
-            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold uppercase">{user?.role || "SUPER_ADMIN"}</span>
-          </div>
-        </div>
-
-        {/* Navigation links */}
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto pb-6">
-          {/* Main Dashboard Link */}
-          <Link
-            href="/dashboard"
-            onClick={handleLinkClick}
-            className={`relative flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors ${
-              pathname === "/dashboard"
-                ? "text-white"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
-            }`}
+        {/* Mobile close / Desktop collapse toggle */}
+        {isMobile && onClose ? (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+            aria-label="Close navigation"
           >
-            {pathname === "/dashboard" && (
-              <motion.div
-                layoutId="sidebar-active-dashboard"
-                className="absolute inset-0 bg-royal rounded-xl shadow-md shadow-royal/20 pointer-events-none"
-                transition={{ type: "spring", stiffness: 450, damping: 35 }}
-              />
+            <X className="w-4 h-4" />
+          </button>
+        ) : onToggleCollapse ? (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <PanelLeft className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
             )}
-            <LayoutDashboard className="w-4 h-4 shrink-0 relative z-10" />
-            <span className="relative z-10">Dashboard</span>
-          </Link>
-
-          {/* Section list */}
-          {visibleSections.map((section) => {
-            const SectionIcon = section.icon;
-            const expanded = expandedSections[section.id];
-            const isSubitemActive = section.items.some((item) => pathname === item.href);
-
-            return (
-              <div key={section.id} className="space-y-0.5 pt-1">
-                {/* Header button */}
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                    isSubitemActive
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-slate-900/20"
-                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900/40"
-                  }`}
-                >
-                  <div className="flex items-center space-x-2">
-                    <SectionIcon className="w-3.5 h-3.5 shrink-0" />
-                    <span>{section.title}</span>
-                  </div>
-                  {expanded ? (
-                    <ChevronDown className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                  )}
-                </button>
-
-                {/* Sub items collapsible list */}
-                {expanded && (
-                  <div className="pl-3 space-y-0.5 border-l border-slate-200 dark:border-slate-900 ml-5 my-0.5">
-                    {section.items.map((item) => {
-                      const ItemIcon = item.icon;
-                      const active = pathname === item.href;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={handleLinkClick}
-                          className={`relative flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs transition-colors ${
-                            active
-                              ? "text-blue-600 dark:text-blue-400 font-bold"
-                              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/40 font-semibold"
-                          }`}
-                        >
-                          {active && (
-                            <motion.div
-                              layoutId="sidebar-active-subitem"
-                              className="absolute inset-0 bg-blue-50 dark:bg-slate-900 rounded-lg border-r-2 border-blue-600 dark:border-blue-500 pointer-events-none"
-                              transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                            />
-                          )}
-                          <ItemIcon className="w-3.5 h-3.5 shrink-0 relative z-10" />
-                          <span className="relative z-10">{item.name}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
+          </button>
+        ) : null}
       </div>
 
-      {/* Footer logout button */}
-      <div className="p-3.5 border-t border-slate-200 dark:border-slate-900 shrink-0">
+      {/* ── User Card ─────────────────────────────────────────── */}
+      <div
+        className={`mx-3 my-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] flex items-center shrink-0 overflow-hidden transition-all duration-200 ${
+          collapsed ? "p-2 justify-center" : "p-3 gap-3"
+        }`}
+      >
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md shadow-blue-600/20">
+          {userInitial}
+        </div>
+        {!collapsed && (
+          <div className="min-w-0 overflow-hidden">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate leading-none mb-1">
+              {user?.name || "Admin User"}
+            </h4>
+            <span className="text-[9px] text-blue-500 font-bold uppercase tracking-wider leading-none">
+              {user?.role?.replace("_", " ") || "SUPER ADMIN"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Navigation ───────────────────────────────────────── */}
+      <nav className="flex-1 px-2.5 overflow-y-auto pb-4 space-y-0.5">
+        {/* Main Dashboard Link */}
+        <Link
+          href="/dashboard"
+          onClick={handleLinkClick}
+          title={collapsed ? "Operations Dashboard" : undefined}
+          className={`relative flex items-center rounded-xl text-xs font-bold transition-all overflow-hidden ${
+            collapsed ? "h-10 justify-center px-0" : "h-9 px-3 gap-3"
+          } ${
+            pathname === "/dashboard"
+              ? "text-white"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+          }`}
+        >
+          {pathname === "/dashboard" && (
+            <motion.div
+              layoutId="sidebar-active-bg"
+              className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/30 pointer-events-none"
+              transition={{ type: "spring", stiffness: 500, damping: 36 }}
+            />
+          )}
+          <LayoutDashboard className="w-4 h-4 shrink-0 relative z-10" />
+          {!collapsed && <span className="relative z-10 truncate">Dashboard</span>}
+        </Link>
+
+        {/* Section Navigation Groups */}
+        {visibleSections.map((section) => {
+          const SectionIcon = section.icon as React.ElementType;
+          const expanded = expandedSections[section.id];
+          const isSubitemActive = section.items.some(
+            (item) => pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+          );
+
+          return (
+            <div key={section.id} className="pt-1">
+              <button
+                type="button"
+                onClick={() => (collapsed ? undefined : toggleSection(section.id))}
+                title={collapsed ? section.title : undefined}
+                className={`w-full flex items-center rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer overflow-hidden ${
+                  collapsed ? "h-10 justify-center px-0" : "h-8 px-3 gap-2 justify-between"
+                } ${
+                  isSubitemActive
+                    ? "text-blue-500 bg-blue-500/10"
+                    : "text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.04]"
+                }`}
+              >
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <SectionIcon className="w-3.5 h-3.5 shrink-0" />
+                  {!collapsed && <span className="truncate">{section.title}</span>}
+                </div>
+                {!collapsed &&
+                  (expanded ? (
+                    <ChevronDown className="w-3 h-3 shrink-0 text-slate-400" />
+                  ) : (
+                    <ChevronRight className="w-3 h-3 shrink-0 text-slate-400" />
+                  ))}
+              </button>
+
+              {/* Sub-items list */}
+              <AnimatePresence initial={false}>
+                {expanded && !collapsed && (
+                  <motion.div
+                    key={`section-${section.id}`}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pl-3.5 ml-3 border-l border-slate-200 dark:border-white/[0.08] py-0.5 space-y-0.5 my-0.5">
+                      {section.items.map((item) => {
+                        const ItemIcon = item.icon;
+                        const active =
+                          pathname === item.href ||
+                          (item.href !== "/" && pathname.startsWith(item.href));
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={handleLinkClick}
+                            className={`relative flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-xs transition-colors ${
+                              active
+                                ? "text-blue-500 bg-blue-500/10 font-bold"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.04] font-medium"
+                            }`}
+                          >
+                            {active && (
+                              <motion.div
+                                layoutId="sidebar-active-subitem"
+                                className="absolute inset-0 rounded-lg border-l-2 border-blue-500 pointer-events-none"
+                                transition={{ type: "spring", stiffness: 500, damping: 36 }}
+                              />
+                            )}
+                            <ItemIcon className="w-3.5 h-3.5 shrink-0 relative z-10" />
+                            <span className="relative z-10 truncate">{item.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* ── Footer / Logout ──────────────────────────────────── */}
+      <div className="px-2.5 pb-4 border-t border-slate-100 dark:border-white/[0.08] pt-3 shrink-0">
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-900 hover:border-rose-200 dark:hover:border-rose-950 text-xs font-bold transition-all cursor-pointer"
+          title={collapsed ? "Sign Out" : undefined}
+          className={`w-full flex items-center rounded-xl text-xs font-bold transition-all cursor-pointer overflow-hidden ${
+            collapsed ? "h-10 justify-center" : "h-9 px-3 gap-2.5"
+          } text-slate-500 dark:text-slate-400 hover:text-rose-400 hover:bg-rose-500/10`}
         >
           <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sign Out</span>
+          {!collapsed && <span>Sign Out</span>}
         </button>
       </div>
     </aside>

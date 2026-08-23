@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import {
   Globe,
@@ -17,14 +17,18 @@ import {
   Mail,
   FileText,
   History,
+  Sparkles,
+  Send,
 } from "lucide-react";
 import { AdminFormSkeleton } from "@/components/AdminSkeleton";
+import { useToast } from "@/components/ui/Toast";
 
 export default function AdminCMSPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
+  const [activeTab, setActiveTab] = useState<"HERO" | "BRAND" | "ABOUT" | "COMPANY" | "FOUNDERS">("HERO");
+  const { showToast } = useToast();
 
   // ── Hero Section ──────────────────────────────────────────
   const [heroTitle, setHeroTitle] = useState("");
@@ -42,7 +46,7 @@ export default function AdminCMSPage() {
   const [aboutDescription, setAboutDescription] = useState("");
 
   // ── Company Details ───────────────────────────────────────
-  const [companyName, setCompanyName] = useState("NVIT SOLUTION PVT. LTD.");
+  const [companyName, setCompanyName] = useState("NVIT.SPACE");
   const [companyTagline, setCompanyTagline] = useState("");
   const [companyAddress, setCompanyAddress] = useState("");
   const [companyCity, setCompanyCity] = useState("");
@@ -63,7 +67,6 @@ export default function AdminCMSPage() {
   const [coFounderLinkedin, setCoFounderLinkedin] = useState("");
 
   const [cmsStatus, setCmsStatus] = useState("DRAFT");
-  const [cmsHistory, setCmsHistory] = useState<any[]>([]);
 
   const fetchCMS = async () => {
     setLoading(true);
@@ -87,7 +90,7 @@ export default function AdminCMSPage() {
           setAboutDescription(data.about.description || "");
         }
         if (data.company) {
-          setCompanyName(data.company.name || "NVIT SOLUTION PVT. LTD.");
+          setCompanyName(data.company.name || "NVIT.SPACE");
           setCompanyTagline(data.company.tagline || "");
           setCompanyAddress(data.company.address || "");
           setCompanyCity(data.company.city || "");
@@ -101,16 +104,16 @@ export default function AdminCMSPage() {
           setFounderTitle(data.founders.founder?.title || "Founder & CEO");
           setFounderBio(data.founders.founder?.bio || "");
           setFounderLinkedin(data.founders.founder?.linkedin || "");
+
           setCoFounderName(data.founders.coFounder?.name || "Vineet");
           setCoFounderTitle(data.founders.coFounder?.title || "Co-Founder & CTO");
           setCoFounderBio(data.founders.coFounder?.bio || "");
           setCoFounderLinkedin(data.founders.coFounder?.linkedin || "");
         }
         if (data.status) setCmsStatus(data.status);
-        if (data.history) setCmsHistory(data.history);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load CMS content", err);
     } finally {
       setLoading(false);
     }
@@ -120,527 +123,476 @@ export default function AdminCMSPage() {
     fetchCMS();
   }, []);
 
-  const handleSaveDraft = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const getPayload = (status: "DRAFT" | "PUBLISHED") => ({
+    status,
+    hero: { title: heroTitle, subtitle: heroSubtitle },
+    brand: {
+      logoUrl: headerLogoUrl,
+      themeColor: primaryThemeColor,
+      supportEmail,
+      supportPhone,
+    },
+    about: { vision: visionText, mission: missionText, description: aboutDescription },
+    company: {
+      name: companyName,
+      tagline: companyTagline,
+      address: companyAddress,
+      city: companyCity,
+      state: companyState,
+      cin: companyCin,
+      gst: companyGst,
+      website: companyWebsite,
+    },
+    founders: {
+      founder: { name: founderName, title: founderTitle, bio: founderBio, linkedin: founderLinkedin },
+      coFounder: { name: coFounderName, title: coFounderTitle, bio: coFounderBio, linkedin: coFounderLinkedin },
+    },
+  });
+
+  const handleSaveDraft = async () => {
     setSaving(true);
-    setSuccessMsg("");
-
-    const payload = {
-      hero: { title: heroTitle, subtitle: heroSubtitle },
-      brand: { logoUrl: headerLogoUrl, themeColor: primaryThemeColor, supportEmail, supportPhone },
-      about: { vision: visionText, mission: missionText, description: aboutDescription },
-      company: {
-        name: companyName,
-        tagline: companyTagline,
-        address: companyAddress,
-        city: companyCity,
-        state: companyState,
-        cin: companyCin,
-        gst: companyGst,
-        website: companyWebsite,
-      },
-      founders: {
-        founder: { name: founderName, title: founderTitle, bio: founderBio, linkedin: founderLinkedin },
-        coFounder: { name: coFounderName, title: coFounderTitle, bio: coFounderBio, linkedin: coFounderLinkedin },
-      },
-    };
-
     try {
-      const res = await apiClient.put("/admin/cms", payload);
-      if (res.data.success) {
-        setSuccessMsg("Draft version saved successfully!");
-        fetchCMS();
-        setTimeout(() => setSuccessMsg(""), 4000);
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to save draft");
+      await apiClient.post("/admin/cms", getPayload("DRAFT"));
+      setCmsStatus("DRAFT");
+      showToast({ title: "CMS Draft saved successfully", type: "success" });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Save failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePublishLive = async () => {
+  const handlePublish = async () => {
     setPublishing(true);
-    setSuccessMsg("");
     try {
-      const res = await apiClient.post("/admin/cms/publish");
-      if (res.data.success) {
-        setSuccessMsg("CMS changes successfully published and live!");
-        fetchCMS();
-        setTimeout(() => setSuccessMsg(""), 4000);
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to publish live");
+      await apiClient.post("/admin/cms", getPayload("PUBLISHED"));
+      setCmsStatus("PUBLISHED");
+      showToast({ title: "CMS Changes published live to website!", type: "success" });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Publish failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setPublishing(false);
     }
   };
 
-  const handleRollback = async (version: number) => {
-    if (!confirm(`Are you sure you want to rollback to version ${version}?`)) return;
-    setLoading(true);
-    try {
-      const res = await apiClient.post("/admin/cms/rollback", { version });
-      if (res.data.success) {
-        setSuccessMsg(`CMS rolled back to version ${version} successfully!`);
-        fetchCMS();
-        setTimeout(() => setSuccessMsg(""), 4000);
-      }
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to rollback version");
-      setLoading(false);
-    }
-  };
-
-  const inputCls = "w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors";
-  const labelCls = "text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider";
-  const sectionCls = "bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-md space-y-6";
+  const tabs = [
+    { id: "HERO", label: "Hero Header", icon: Type },
+    { id: "BRAND", label: "Brand & Colors", icon: Palette },
+    { id: "ABOUT", label: "Vision & About", icon: FileText },
+    { id: "COMPANY", label: "Legal Entity", icon: Building2 },
+    { id: "FOUNDERS", label: "Founders", icon: Users },
+  ] as const;
 
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-900 pb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Website CMS &amp; Company Settings</h1>
-            <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase border ${
-              cmsStatus === "PUBLISHED"
-                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10"
-                : "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 animate-pulse"
-            }`}>
-              {cmsStatus}
-            </span>
+    <div className="space-y-7 max-w-5xl mx-auto">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+              <Globe className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Website CMS &amp; Live Site Editor
+            </h1>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">
-            Manage company name, founders, contact details, hero content, and branding
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Manage public website copy, hero headers, support channels, brand themes, and corporate legal entity records.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
-            type="submit"
-            form="cms-form"
+            onClick={handleSaveDraft}
             disabled={saving || publishing}
-            className="h-10 px-5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 disabled:opacity-50 text-slate-900 dark:text-white text-xs font-black transition-all flex items-center gap-2 cursor-pointer"
+            className="btn-secondary h-10 px-4 text-xs font-bold"
           >
-            <Save className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-            <span>{saving ? "Saving Draft..." : "Save Draft"}</span>
+            <Save className={`w-3.5 h-3.5 ${saving ? "animate-spin" : ""}`} />
+            <span>Save Draft</span>
           </button>
           <button
-            type="button"
-            onClick={handlePublishLive}
+            onClick={handlePublish}
             disabled={saving || publishing}
-            className="h-10 px-5 rounded-xl bg-royal hover:bg-royal-hover disabled:opacity-50 text-white text-xs font-black shadow-lg shadow-royal/20 transition-all flex items-center gap-2 cursor-pointer"
+            className="btn-primary h-10 px-5 text-xs font-bold"
           >
-            <Globe className="w-4 h-4" />
-            <span>{publishing ? "Publishing..." : "Publish Live"}</span>
+            <Send className={`w-3.5 h-3.5 ${publishing ? "animate-spin" : ""}`} />
+            <span>Publish Live Site</span>
           </button>
         </div>
       </div>
 
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
+      {/* ── Tabs Bar ─────────────────────────────────────────── */}
+      <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-white/[0.08]">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const active = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                active
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "bg-slate-100 dark:bg-white/[0.04] text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {loading ? (
         <AdminFormSkeleton />
       ) : (
-        <div className="space-y-8">
-          <form id="cms-form" onSubmit={handleSaveDraft} className="space-y-8">
-
-            {/* ── Section 1: Company Details ─────────────────────────── */}
-            <div className={sectionCls}>
-              <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Company Details</h2>
-                <span className="ml-auto text-[10px] font-bold text-slate-400 dark:text-slate-500">Displayed in footer, about page, and legal sections</span>
+        <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+          {/* ── HERO TAB ───────────────────────────────────────── */}
+          {activeTab === "HERO" && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Landing Page Hero Title *
+                </label>
+                <input
+                  type="text"
+                  value={heroTitle}
+                  onChange={(e) => setHeroTitle(e.target.value)}
+                  placeholder="e.g. Check Loan Eligibility Across 50+ Lenders Instantly"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-1">
-                  <label className={labelCls}>Company Legal Name *</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Landing Page Hero Subtitle
+                </label>
+                <textarea
+                  rows={3}
+                  value={heroSubtitle}
+                  onChange={(e) => setHeroSubtitle(e.target.value)}
+                  placeholder="e.g. Multi-lender underwriting matrix matching your exact employer category and income parameters."
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── BRAND TAB ──────────────────────────────────────── */}
+          {activeTab === "BRAND" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Header Logo URL</label>
                   <input
-                    type="text"
-                    required
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="e.g. NVIT SOLUTION PVT. LTD."
-                    className={inputCls}
+                    type="url"
+                    value={headerLogoUrl}
+                    onChange={(e) => setHeaderLogoUrl(e.target.value)}
+                    placeholder="https://example.com/logo.svg"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Company Tagline</label>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Primary Theme Color</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={primaryThemeColor}
+                      onChange={(e) => setPrimaryThemeColor(e.target.value)}
+                      className="w-12 h-11 rounded-xl bg-transparent border border-slate-200 dark:border-white/[0.08] cursor-pointer p-1"
+                    />
+                    <input
+                      type="text"
+                      value={primaryThemeColor}
+                      onChange={(e) => setPrimaryThemeColor(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Support Email</label>
+                  <input
+                    type="email"
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
+                    placeholder="support@nvit.space"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Support Helpline</label>
+                  <input
+                    type="text"
+                    value={supportPhone}
+                    onChange={(e) => setSupportPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ABOUT TAB ──────────────────────────────────────── */}
+          {activeTab === "ABOUT" && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Corporate Vision</label>
+                <textarea
+                  rows={3}
+                  value={visionText}
+                  onChange={(e) => setVisionText(e.target.value)}
+                  placeholder="Empowering every salaried professional with transparent lending access..."
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Corporate Mission</label>
+                <textarea
+                  rows={3}
+                  value={missionText}
+                  onChange={(e) => setMissionText(e.target.value)}
+                  placeholder="Democratizing credit underwriting through automated employer categorization..."
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Company Overview</label>
+                <textarea
+                  rows={4}
+                  value={aboutDescription}
+                  onChange={(e) => setAboutDescription(e.target.value)}
+                  placeholder="Detailed company background and technology platform overview..."
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── COMPANY TAB ────────────────────────────────────── */}
+          {activeTab === "COMPANY" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Entity Legal Name</label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="NVIT.SPACE"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Tagline / Motto</label>
                   <input
                     type="text"
                     value={companyTagline}
                     onChange={(e) => setCompanyTagline(e.target.value)}
-                    placeholder="e.g. Empowering Financial Decisions"
-                    className={inputCls}
+                    placeholder="Intelligent Credit Underwriting Engine"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1 md:col-span-2">
-                  <label className={labelCls}>Registered Office Address</label>
-                  <input
-                    type="text"
-                    value={companyAddress}
-                    onChange={(e) => setCompanyAddress(e.target.value)}
-                    placeholder="e.g. Sector 8, E-14, 3rd Floor, near Java Showroom, Sector 15 Metro"
-                    className={inputCls}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>City</label>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Registered Office Address</label>
+                <input
+                  type="text"
+                  value={companyAddress}
+                  onChange={(e) => setCompanyAddress(e.target.value)}
+                  placeholder="e.g. Cyber City, Sector 24"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">City</label>
                   <input
                     type="text"
                     value={companyCity}
                     onChange={(e) => setCompanyCity(e.target.value)}
-                    placeholder="e.g. Noida"
-                    className={inputCls}
+                    placeholder="Gurugram"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>State &amp; PIN</label>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">State</label>
                   <input
                     type="text"
                     value={companyState}
                     onChange={(e) => setCompanyState(e.target.value)}
-                    placeholder="e.g. Uttar Pradesh – 201301"
-                    className={inputCls}
+                    placeholder="Haryana"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>CIN / Registration No.</label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">CIN Number</label>
                   <input
                     type="text"
                     value={companyCin}
-                    onChange={(e) => setCompanyCin(e.target.value)}
-                    placeholder="e.g. U74999UP2024PTC000000"
-                    className={inputCls}
+                    onChange={(e) => setCompanyCin(e.target.value.toUpperCase())}
+                    placeholder="U72900HR2024PTC123456"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>GST Number</label>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">GSTIN Identification</label>
                   <input
                     type="text"
                     value={companyGst}
-                    onChange={(e) => setCompanyGst(e.target.value)}
-                    placeholder="e.g. 09AAAAA0000A1Z5"
-                    className={inputCls}
+                    onChange={(e) => setCompanyGst(e.target.value.toUpperCase())}
+                    placeholder="06AAAAA0000A1Z5"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Support Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="email"
-                      value={supportEmail}
-                      onChange={(e) => setSupportEmail(e.target.value)}
-                      placeholder="info@nvitsolution.com"
-                      className={`${inputCls} pl-9`}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Support Phone</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={supportPhone}
-                      onChange={(e) => setSupportPhone(e.target.value)}
-                      placeholder="e.g. +91 98765 43210"
-                      className={`${inputCls} pl-9`}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Website URL</label>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Website URL</label>
                   <input
                     type="url"
                     value={companyWebsite}
                     onChange={(e) => setCompanyWebsite(e.target.value)}
-                    placeholder="https://nvitsolution.com"
-                    className={inputCls}
+                    placeholder="https://nvit.space"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
               </div>
             </div>
+          )}
 
-            {/* ── Section 2: Founders ────────────────────────────────── */}
-            <div className={sectionCls}>
-              <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Founders &amp; Leadership</h2>
-                <span className="ml-auto text-[10px] font-bold text-slate-400 dark:text-slate-500">Displayed on About / Team sections</span>
-              </div>
+          {/* ── FOUNDERS TAB ───────────────────────────────────── */}
+          {activeTab === "FOUNDERS" && (
+            <div className="space-y-6">
+              {/* Founder 1 */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] space-y-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  Primary Founder Profile
+                </h3>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-                {/* Founder */}
-                <div className="space-y-4 p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-black">F</div>
-                    <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Founder</span>
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Full Name *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">Name</label>
                     <input
                       type="text"
-                      required
                       value={founderName}
                       onChange={(e) => setFounderName(e.target.value)}
-                      placeholder="e.g. Nishant Bhardwaj"
-                      className={inputCls}
+                      placeholder="Nishant Bhardwaj"
+                      className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Title / Designation</label>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">Designation / Title</label>
                     <input
                       type="text"
                       value={founderTitle}
                       onChange={(e) => setFounderTitle(e.target.value)}
-                      placeholder="e.g. Founder &amp; CEO"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Short Bio</label>
-                    <textarea
-                      value={founderBio}
-                      onChange={(e) => setFounderBio(e.target.value)}
-                      placeholder="Brief background, expertise, and vision..."
-                      className={`${inputCls} h-24 resize-none`}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>LinkedIn Profile URL</label>
-                    <input
-                      type="url"
-                      value={founderLinkedin}
-                      onChange={(e) => setFounderLinkedin(e.target.value)}
-                      placeholder="https://linkedin.com/in/nishant-bhardwaj"
-                      className={inputCls}
+                      placeholder="Founder & CEO"
+                      className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
                 </div>
 
-                {/* Co-Founder */}
-                <div className="space-y-4 p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white text-xs font-black">CF</div>
-                    <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Co-Founder</span>
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Full Name *</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Bio Summary</label>
+                  <textarea
+                    rows={2}
+                    value={founderBio}
+                    onChange={(e) => setFounderBio(e.target.value)}
+                    placeholder="Leadership background and fintech experience..."
+                    className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">LinkedIn URL</label>
+                  <input
+                    type="url"
+                    value={founderLinkedin}
+                    onChange={(e) => setFounderLinkedin(e.target.value)}
+                    placeholder="https://linkedin.com/in/nishant"
+                    className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Founder 2 */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] space-y-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  Co-Founder Profile
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">Name</label>
                     <input
                       type="text"
-                      required
                       value={coFounderName}
                       onChange={(e) => setCoFounderName(e.target.value)}
-                      placeholder="e.g. Vineet"
-                      className={inputCls}
+                      placeholder="Vineet"
+                      className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Title / Designation</label>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">Designation / Title</label>
                     <input
                       type="text"
                       value={coFounderTitle}
                       onChange={(e) => setCoFounderTitle(e.target.value)}
-                      placeholder="e.g. Co-Founder &amp; CTO"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Short Bio</label>
-                    <textarea
-                      value={coFounderBio}
-                      onChange={(e) => setCoFounderBio(e.target.value)}
-                      placeholder="Brief background, expertise, and vision..."
-                      className={`${inputCls} h-24 resize-none`}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>LinkedIn Profile URL</label>
-                    <input
-                      type="url"
-                      value={coFounderLinkedin}
-                      onChange={(e) => setCoFounderLinkedin(e.target.value)}
-                      placeholder="https://linkedin.com/in/vineet"
-                      className={inputCls}
+                      placeholder="Co-Founder & CTO"
+                      className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* ── Section 3: About / Vision / Mission ────────────────── */}
-            <div className={`${sectionCls}`}>
-              <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <FileText className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">About Section &amp; Mission</h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-1 md:col-span-2">
-                  <label className={labelCls}>About / Company Description</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Bio Summary</label>
                   <textarea
-                    value={aboutDescription}
-                    onChange={(e) => setAboutDescription(e.target.value)}
-                    placeholder="e.g. NVIT Solution PVT. LTD. is India's trusted DSA loan consultancy and financial technology marketplace..."
-                    className={`${inputCls} h-28 resize-none`}
+                    rows={2}
+                    value={coFounderBio}
+                    onChange={(e) => setCoFounderBio(e.target.value)}
+                    placeholder="Engineering and platform architecture experience..."
+                    className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Vision Statement</label>
-                  <textarea
-                    value={visionText}
-                    onChange={(e) => setVisionText(e.target.value)}
-                    placeholder="State the institutional vision..."
-                    className={`${inputCls} h-24 resize-none`}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className={labelCls}>Mission Statement</label>
-                  <textarea
-                    value={missionText}
-                    onChange={(e) => setMissionText(e.target.value)}
-                    placeholder="State the operational mission..."
-                    className={`${inputCls} h-24 resize-none`}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">LinkedIn URL</label>
+                  <input
+                    type="url"
+                    value={coFounderLinkedin}
+                    onChange={(e) => setCoFounderLinkedin(e.target.value)}
+                    placeholder="https://linkedin.com/in/vineet"
+                    className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
               </div>
             </div>
-
-            {/* ── Section 4: Hero Banner ─────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-              <div className={sectionCls}>
-                <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                  <Layout className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Public Hero Banner</h2>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className={labelCls}>Main Hero Headline *</label>
-                    <input
-                      type="text"
-                      required
-                      value={heroTitle}
-                      onChange={(e) => setHeroTitle(e.target.value)}
-                      placeholder="e.g. Smart Institutional Credit Matching Platform"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Sub-Headline Tagline *</label>
-                    <textarea
-                      required
-                      value={heroSubtitle}
-                      onChange={(e) => setHeroSubtitle(e.target.value)}
-                      placeholder="e.g. Compare bank policies, eligibility parameters instantly."
-                      className={`${inputCls} h-24 resize-none`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Section 5: Branding ───────────────────────────────── */}
-              <div className={sectionCls}>
-                <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                  <Palette className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Branding &amp; Theme</h2>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className={labelCls}>Header Brand Logo URL</label>
-                    <input
-                      type="text"
-                      value={headerLogoUrl}
-                      onChange={(e) => setHeaderLogoUrl(e.target.value)}
-                      placeholder="e.g. /images/logo.png"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Primary Accent Color</label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="color"
-                        value={primaryThemeColor}
-                        onChange={(e) => setPrimaryThemeColor(e.target.value)}
-                        className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={primaryThemeColor}
-                        onChange={(e) => setPrimaryThemeColor(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-mono rounded-xl text-xs font-semibold uppercase focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </form>
-
-          {/* ── Version History ──────────────────────────────────────── */}
-          <div className={sectionCls}>
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">CMS Publication Version History</h2>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 text-[10px] uppercase font-black tracking-wider border-b border-slate-200 dark:border-slate-800">
-                    <th className="py-3 px-5">Version</th>
-                    <th className="py-3 px-5">Published By</th>
-                    <th className="py-3 px-5">Timestamp</th>
-                    <th className="py-3 px-5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200">
-                  {cmsHistory.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400 italic">
-                        No publication versions recorded yet. Save and Publish to log first version.
-                      </td>
-                    </tr>
-                  ) : (
-                    [...cmsHistory].reverse().map((h) => (
-                      <tr key={h.version} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3.5 px-5 font-black text-blue-600 dark:text-blue-400">v{h.version}</td>
-                        <td className="py-3.5 px-5 font-medium text-slate-900 dark:text-white">{h.publishedBy}</td>
-                        <td className="py-3.5 px-5 font-mono text-[10px] text-slate-500">
-                          {new Date(h.timestamp).toLocaleString()}
-                        </td>
-                        <td className="py-3.5 px-5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleRollback(h.version)}
-                            className="px-3 py-1 bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-800 text-[10px] font-black text-slate-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-800 cursor-pointer transition-colors"
-                          >
-                            Restore
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          )}
         </div>
       )}
-    </main>
+    </div>
   );
 }
-

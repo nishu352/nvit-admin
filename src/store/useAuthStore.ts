@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { User } from "@/types";
 import { authService, LoginPayload } from "@/services/authService";
+import { safeStorage } from "@/lib/storage";
 
 interface AuthState {
   user: User | null;
@@ -9,27 +10,13 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (payload: LoginPayload) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
-}
-
-// Safe localStorage wrapper — guards against SecurityError (e.g. browser
-// extensions, restricted iframes, or private-browsing restrictions)
-function safeLocalStorage(op: "get" | "set" | "remove", key: string, value?: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    if (op === "get") return localStorage.getItem(key);
-    if (op === "set" && value !== undefined) { localStorage.setItem(key, value); return null; }
-    if (op === "remove") { localStorage.removeItem(key); return null; }
-  } catch {
-    // SecurityError or QuotaExceededError — gracefully degrade
-  }
-  return null;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: safeLocalStorage("get", "token"),
+  token: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -39,48 +26,65 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await authService.login(payload);
       const { user, token } = response.data;
-      safeLocalStorage("set", "token", token);
+      if (token) {
+        safeStorage.setItem("admin_token", token);
+      }
       set({
         user,
-        token,
+        token: token || null,
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (err: any) {
-      const msg = err.response?.data?.message || "Invalid credentials";
-      set({ error: msg, isLoading: false });
+    } catch (err: unknown) {
+      safeStorage.removeItem("admin_token");
+      const msg =
+        err instanceof Error
+          ? err.message
+          : (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+            "Invalid credentials";
+      set({ error: msg, isLoading: false, isAuthenticated: false, user: null });
       throw new Error(msg);
     }
   },
 
-  logout: () => {
-    safeLocalStorage("remove", "token");
+  logout: async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Swallow logout API errors — client-side cleanup still proceeds
+    }
+    safeStorage.removeItem("admin_token");
     set({
       user: null,
       token: null,
       isAuthenticated: false,
       error: null,
     });
+    // Fire a clean navigation event rather than hard reload
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("admin:auth:redirect", { detail: { path: "/" } }));
+    }
   },
 
   checkAuth: async () => {
-    const token = safeLocalStorage("get", "token");
-    if (!token) {
-      set({ isAuthenticated: false, user: null, token: null });
-      return;
-    }
-
     set({ isLoading: true });
     try {
       const response = await authService.getMe();
-      set({
-        user: response.data,
-        token,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } catch (err) {
-      safeLocalStorage("remove", "token");
+      if (response && response.data) {
+        set({
+          user: response.data,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } else {
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      }
+    } catch {
       set({
         user: null,
         token: null,

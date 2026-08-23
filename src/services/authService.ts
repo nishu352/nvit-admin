@@ -25,4 +25,13 @@ export const authService = {
     const response = await apiClient.get<{ success: boolean; data: User }>("/auth/me");
     return response.data;
   },
+
+  async logout(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>("/auth/logout");
+      return response.data;
+    } catch {
+      return { success: true, message: "Logged out" };
+    }
+  },
 };

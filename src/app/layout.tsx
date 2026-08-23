@@ -24,6 +24,7 @@ export const metadata: Metadata = {
 import AuthGuard from "@/components/AuthGuard";
 import QueryProvider from "@/providers/QueryProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -52,7 +53,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100" suppressHydrationWarning>
         <ThemeProvider>
           <QueryProvider>
-            <AuthGuard>{children}</AuthGuard>
+            <ToastProvider>
+              <AuthGuard>{children}</AuthGuard>
+            </ToastProvider>
           </QueryProvider>
         </ThemeProvider>
         <Analytics />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import {
   Sliders,
@@ -10,13 +11,18 @@ import {
   MessageSquare,
   Power,
   Server,
+  Shield,
+  RefreshCw,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { AdminFormSkeleton } from "@/components/AdminSkeleton";
+import { useToast } from "@/components/ui/Toast";
 
 export default function AdminSystemPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState(false);
+  const { showToast } = useToast();
 
   // System Fields
   const [smtpHost, setSmtpHost] = useState("");
@@ -65,11 +71,10 @@ export default function AdminSystemPage() {
   const handleSaveSystem = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setSuccessMsg(false);
 
     const payload = {
-      smtp: { host: smtpHost, port: smtpPort, user: smtpUser, password: smtpPassword },
-      gateways: { smsKey: smsApiKey, whatsappKey: whatsappApiKey },
+      smtp: { host: smtpHost.trim(), port: smtpPort.trim(), user: smtpUser.trim(), password: smtpPassword },
+      gateways: { smsKey: smsApiKey.trim(), whatsappKey: whatsappApiKey.trim() },
       maintenance: maintenanceMode,
       twoStepVerification: twoStepVerification,
     };
@@ -77,189 +82,202 @@ export default function AdminSystemPage() {
     try {
       const res = await apiClient.put("/admin/system", payload);
       if (res.data.success) {
-        setSuccessMsg(true);
-        setTimeout(() => setSuccessMsg(false), 4000);
+        showToast({ title: "System engine settings saved successfully!", type: "success" });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Save failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-900 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">System &amp; Infrastructure Control</h1>
+    <div className="space-y-7 max-w-5xl mx-auto">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+              <Sliders className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              System Settings &amp; Engine Control
+            </h1>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">Configure transactional SMTP credentials, SMS &amp; WhatsApp APIs, and system maintenance switches</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Transactional email gateways, SMS / WhatsApp providers, 2FA security, and platform maintenance killswitches.
+          </p>
         </div>
-        <button
-          onClick={handleSaveSystem}
-          disabled={saving}
-          className="h-10 px-5 rounded-xl bg-royal hover:bg-royal-hover disabled:opacity-50 text-white text-xs font-black shadow-lg shadow-royal/20 transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <Save className="w-4 h-4" />
-          <span>{saving ? "Updating Systems..." : "Save System Config"}</span>
-        </button>
-      </div>
 
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span>System infrastructure configurations saved successfully!</span>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={handleSaveSystem}
+            disabled={saving}
+            className="btn-primary h-10 px-5 text-xs font-bold"
+          >
+            <Save className={`w-3.5 h-3.5 ${saving ? "animate-spin" : ""}`} />
+            <span>{saving ? "Saving Config..." : "Save System Config"}</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {loading ? (
         <AdminFormSkeleton />
       ) : (
-        <form onSubmit={handleSaveSystem} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-          {/* SMTP Credentials */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6">
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Transactional SMTP Credentials</h2>
+        <form onSubmit={handleSaveSystem} className="space-y-6">
+          {/* ── Killswitches & Core Operational Mode ────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <Power className="w-5 h-5 text-amber-400" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                Platform Operational Modes &amp; Security Controls
+              </h2>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Maintenance Mode */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMTP Server Host</label>
-                  <input
-                    type="text"
-                    value={smtpHost}
-                    onChange={(e) => setSmtpHost(e.target.value)}
-                    placeholder="smtp.sendgrid.net"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-slate-900 dark:text-white">
+                      Maintenance Mode
+                    </span>
+                    {maintenanceMode && (
+                      <span className="px-2 py-0.5 rounded text-[8px] font-black badge-rose">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Restrict public user access and display a maintenance notice
+                  </p>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMTP Port</label>
-                  <input
-                    type="text"
-                    value={smtpPort}
-                    onChange={(e) => setSmtpPort(e.target.value)}
-                    placeholder="587"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
-                </div>
+                <input
+                  type="checkbox"
+                  checked={maintenanceMode}
+                  onChange={(e) => setMaintenanceMode(e.target.checked)}
+                  className="w-5 h-5 rounded text-amber-500 cursor-pointer shrink-0"
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 2FA */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMTP Username</label>
-                  <input
-                    type="text"
-                    value={smtpUser}
-                    onChange={(e) => setSmtpUser(e.target.value)}
-                    placeholder="apikey"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
+                  <span className="text-xs font-black text-slate-900 dark:text-white block">
+                    Two-Step Operator Verification
+                  </span>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Enforce OTP challenges for admin console sessions
+                  </p>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMTP Password</label>
-                  <input
-                    type="password"
-                    value={smtpPassword}
-                    onChange={(e) => setSmtpPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
-                </div>
+                <input
+                  type="checkbox"
+                  checked={twoStepVerification}
+                  onChange={(e) => setTwoStepVerification(e.target.checked)}
+                  className="w-5 h-5 rounded text-blue-600 cursor-pointer shrink-0"
+                />
               </div>
             </div>
           </div>
 
-          {/* Messaging Gateways */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6">
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <MessageSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">SMS &amp; WhatsApp API Gateways</h2>
+          {/* ── Transactional SMTP Email ────────────────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <Mail className="w-5 h-5 text-blue-500" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                Transactional SMTP Gateway
+              </h2>
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMS Gateway API Key (Fast2SMS / DLT)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">SMTP Host / Server</label>
                 <input
                   type="text"
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="e.g. smtp.postmarkapp.com"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">SMTP Port</label>
+                <input
+                  type="text"
+                  value={smtpPort}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  placeholder="587"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Username / Key</label>
+                <input
+                  type="text"
+                  value={smtpUser}
+                  onChange={(e) => setSmtpUser(e.target.value)}
+                  placeholder="apikey"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Password / Token</label>
+                <input
+                  type="password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                  placeholder="••••••••••••••••"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── SMS & WhatsApp Communication Gateways ────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <MessageSquare className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                SMS &amp; WhatsApp Notification Gateways
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">SMS Gateway API Key</label>
+                <input
+                  type="password"
                   value={smsApiKey}
                   onChange={(e) => setSmsApiKey(e.target.value)}
-                  placeholder="Paste SMS Gateway API Token"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white font-mono rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="••••••••••••••••"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">WhatsApp Business API Key (WATI / Interakt)</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  WhatsApp Business API Token
+                </label>
                 <input
-                  type="text"
+                  type="password"
                   value={whatsappApiKey}
                   onChange={(e) => setWhatsappApiKey(e.target.value)}
-                  placeholder="Paste WhatsApp Business Token"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white font-mono rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="••••••••••••••••"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Maintenance Switch */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6 lg:col-span-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <div className="flex items-center space-x-2">
-                <Power className="w-5 h-5 text-amber-500" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Platform Maintenance Mode</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMaintenanceMode(!maintenanceMode)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${
-                  maintenanceMode
-                    ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md"
-                    : "bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-850 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                {maintenanceMode ? "SYSTEM IN MAINTENANCE MODE" : "NORMAL SYSTEM OPERATION"}
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
-              Toggling maintenance mode will restrict public applicant access and display a system upgrade banner across the landing page. Admin portal remains active.
-            </p>
-          </div>
-
-          {/* Security Configuration */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6 lg:col-span-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <div className="flex items-center space-x-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Admin Security Settings</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTwoStepVerification(!twoStepVerification)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${
-                  twoStepVerification
-                    ? "bg-emerald-500 text-white dark:text-slate-950 border-emerald-400 shadow-md"
-                    : "bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-850 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                {twoStepVerification ? "TWO-STEP VERIFICATION IS ON" : "TWO-STEP VERIFICATION IS OFF"}
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
-              Toggling two-step verification adds an extra layer of security for administrator logins. All admin accounts will require a code sent to their registered email/phone.
-            </p>
           </div>
         </form>
       )}
-    </main>
+    </div>
   );
 }

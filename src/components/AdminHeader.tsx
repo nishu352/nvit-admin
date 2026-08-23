@@ -1,12 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Bell, Activity, User, ShieldAlert, CheckCircle, Building2, Building, MapPin, FileCheck, Users, X, Menu } from "lucide-react";
+import {
+  Search,
+  Bell,
+  Activity,
+  CheckCircle,
+  Building2,
+  Building,
+  MapPin,
+  Users,
+  X,
+  Menu,
+  ChevronRight,
+  Shield,
+  FileCheck,
+  Compass,
+} from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { apiClient } from "@/services/apiClient";
 import { useHealthQuery, useRecentAlerts } from "@/hooks/useAdminQueries";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
+import { usePathname, useRouter } from "next/navigation";
+import type { Bank, Company, Pincode, Lead } from "@/types";
 
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -17,6 +33,7 @@ interface AdminHeaderProps {
 export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
   const { user } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [showNotifications, setShowNotifications] = useState(false);
 
   // Cached Queries
@@ -27,13 +44,18 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{
-    banks: any[];
-    companies: any[];
-    pincodes: any[];
-    policies: any[];
-    leads: any[];
-  }>({ banks: [], companies: [], pincodes: [], policies: [], leads: [] });
+    banks: Bank[];
+    companies: Company[];
+    pincodes: Pincode[];
+    leads: Lead[];
+  }>({ banks: [], companies: [], pincodes: [], leads: [] });
   const [searching, setSearching] = useState(false);
+
+  // Breadcrumbs calculation
+  const pathSegments = pathname
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1).replace("-", " "));
 
   // Keyboard shortcut listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -42,16 +64,22 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
         e.preventDefault();
         setShowSearchModal((prev) => !prev);
       }
+      if (e.key === "Escape" && showSearchModal) {
+        setShowSearchModal(false);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [showSearchModal]);
 
   // Perform live multi-entity search when query changes (debounced)
   useEffect(() => {
-    if (!query.trim()) {
-      setSearchResults({ banks: [], companies: [], pincodes: [], policies: [], leads: [] });
-      return;
+    const trimmed = query.trim();
+    if (!trimmed) {
+      const timer = setTimeout(() => {
+        setSearchResults({ banks: [], companies: [], pincodes: [], leads: [] });
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const timer = setTimeout(async () => {
@@ -59,30 +87,29 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
       try {
         const [banksRes, cosRes, pinsRes, leadsRes] = await Promise.all([
           apiClient.get(`/admin/banks`),
-          apiClient.get(`/admin/companies?limit=5&query=${encodeURIComponent(query)}`),
-          apiClient.get(`/admin/pincodes?limit=5&query=${encodeURIComponent(query)}`),
-          apiClient.get(`/crm/leads?query=${encodeURIComponent(query)}`),
+          apiClient.get(`/admin/companies?limit=5&query=${encodeURIComponent(trimmed)}`),
+          apiClient.get(`/admin/pincodes?limit=5&query=${encodeURIComponent(trimmed)}`),
+          apiClient.get(`/crm/leads?query=${encodeURIComponent(trimmed)}`),
         ]);
 
-        const filteredBanks = (banksRes.data.data || []).filter(
-          (b: any) =>
-            b.name.toLowerCase().includes(query.toLowerCase()) ||
-            b.code.toLowerCase().includes(query.toLowerCase())
+        const filteredBanks = ((banksRes.data.data || []) as Bank[]).filter(
+          (b) =>
+            b.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+            b.code.toLowerCase().includes(trimmed.toLowerCase())
         );
 
         setSearchResults({
           banks: filteredBanks.slice(0, 4),
-          companies: cosRes.data.data?.items || [],
-          pincodes: pinsRes.data.data?.items || [],
-          policies: [],
-          leads: (leadsRes.data.data || []).slice(0, 4),
+          companies: (cosRes.data.data?.items || []) as Company[],
+          pincodes: (pinsRes.data.data?.items || []) as Pincode[],
+          leads: ((leadsRes.data.data || []) as Lead[]).slice(0, 4),
         });
-      } catch (err) {
-        console.error(err);
+      } catch (searchErr) {
+        console.error(searchErr);
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -103,40 +130,62 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200 dark:border-slate-850 px-4 sm:px-8 h-16 flex items-center justify-between shrink-0 gap-3">
-        {/* Left: Mobile Hamburger & Search Bar */}
-        <div className="flex items-center space-x-3 flex-1 max-w-md">
+      <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200 dark:border-white/[0.08] px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between shrink-0 gap-3">
+        {/* Left: Hamburger & Breadcrumbs */}
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
           {onMenuToggle && (
             <button
               onClick={onMenuToggle}
-              className="md:hidden w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              className="md:hidden w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors shrink-0"
               aria-label="Toggle Navigation Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
 
-          <div className="flex-1 relative">
-            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search (⌘ K)..."
-              readOnly
-              onClick={() => setShowSearchModal(true)}
-              className="w-full pl-9 sm:pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-950/50 hover:bg-slate-200/70 dark:hover:bg-slate-950 border border-slate-200 dark:border-slate-900 hover:border-slate-300 dark:hover:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 cursor-pointer focus:outline-none transition-colors"
-            />
-            <div className="hidden sm:flex absolute right-3.5 top-1/2 -translate-y-1/2 items-center space-x-0.5 text-[9px] text-slate-400 dark:text-slate-500 font-extrabold border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900/60 px-1.5 py-0.5 rounded shadow-xs">
-              <span>⌘</span>
-              <span>K</span>
-            </div>
+          {/* Breadcrumbs */}
+          <div className="hidden sm:flex items-center space-x-2 text-xs font-semibold text-slate-400 dark:text-slate-500 truncate">
+            <span className="text-slate-600 dark:text-slate-400 font-bold">Admin</span>
+            {pathSegments.map((seg, i) => (
+              <div key={i} className="flex items-center space-x-2">
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0" />
+                <span
+                  className={
+                    i === pathSegments.length - 1
+                      ? "text-slate-900 dark:text-white font-bold"
+                      : "text-slate-500"
+                  }
+                >
+                  {seg}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
+        {/* Center/Search trigger */}
+        <div className="flex-1 max-w-sm">
+          <button
+            type="button"
+            onClick={() => setShowSearchModal(true)}
+            className="w-full flex items-center justify-between px-3.5 py-2 bg-slate-100/80 dark:bg-white/[0.04] hover:bg-slate-200/70 dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs text-slate-400 dark:text-slate-400 cursor-pointer transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span className="font-medium">Quick search...</span>
+            </div>
+            <div className="flex items-center space-x-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] px-1.5 py-0.5 rounded-md">
+              <span>⌘</span>
+              <span>K</span>
+            </div>
+          </button>
+        </div>
+
         {/* Right Actions */}
-        <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
-          {/* Health Indicator */}
-          <div className="hidden lg:flex items-center space-x-2 bg-slate-100 dark:bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Gateway:</span>
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          {/* Live Gateway Status Pill */}
+          <div className="hidden lg:flex items-center space-x-2 bg-slate-100/70 dark:bg-white/[0.04] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/[0.08] text-xs">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">API:</span>
             <div className="flex items-center space-x-1.5">
               <span
                 className={`w-2 h-2 rounded-full inline-block ${
@@ -148,7 +197,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                 }`}
               />
               <span
-                className={`text-[11px] font-semibold ${
+                className={`text-[11px] font-bold ${
                   systemStatus === "ok"
                     ? "text-emerald-600 dark:text-emerald-400"
                     : systemStatus === "error"
@@ -160,7 +209,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                   ? "Operational"
                   : systemStatus === "error"
                   ? "Offline"
-                  : "Checking"}
+                  : "Syncing"}
               </span>
             </div>
           </div>
@@ -168,85 +217,104 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
           {/* Theme Switcher */}
           <ThemeToggle />
 
-          {/* Notifications Bell */}
+          {/* Notifications Bell with Flyout */}
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors relative"
+              className="w-9 h-9 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] hover:border-blue-500/40 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors relative"
               aria-label="View system notifications"
             >
               <Bell className="w-4 h-4" />
               {notifications.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500" />
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-[#091024]" />
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl p-4 shadow-2xl space-y-3 z-50 animate-slow-fade">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-850">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">System Activity Logs</span>
-                  <span className="text-[9px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
-                    {notifications.length} LOGS
+              <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#091024] border border-slate-200 dark:border-white/[0.08] rounded-2xl p-4 shadow-2xl space-y-3 z-50 animate-slow-fade">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/[0.08]">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    Compliance Activity
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
+                    {notifications.length} Logs
                   </span>
                 </div>
-                <div className="divide-y divide-slate-100 dark:divide-slate-850 text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                  {notifications.map((note: any) => (
+                <div className="divide-y divide-slate-100 dark:divide-white/[0.04] text-[11px] font-semibold text-slate-700 dark:text-slate-300 max-h-72 overflow-y-auto">
+                  {notifications.map((note) => (
                     <div key={note.id} className="py-2.5 flex items-start space-x-2.5">
-                      <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-slate-900 dark:text-white truncate font-bold">{note.action}</p>
-                        <p className="text-slate-400 text-[9px] truncate font-medium">{note.userEmail || "System"}</p>
+                        <p className="text-slate-900 dark:text-white truncate font-bold text-xs">
+                          {note.action}
+                        </p>
+                        <p className="text-slate-500 text-[10px] truncate font-medium">
+                          {note.userEmail || "System Engine"}
+                        </p>
                       </div>
                     </div>
                   ))}
                   {notifications.length === 0 && (
-                    <p className="py-4 text-center text-xs text-slate-500 font-normal">No recent alerts</p>
+                    <p className="py-4 text-center text-xs text-slate-500 font-normal">
+                      No recent alerts
+                    </p>
                   )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* User Profile */}
-          <div className="flex items-center space-x-2 sm:border-l sm:border-slate-200 sm:dark:border-slate-900 sm:pl-4 h-8">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md">
-              {user?.name ? user.name.charAt(0) : "A"}
+          {/* User Profile Mini */}
+          <div className="flex items-center space-x-2.5 sm:border-l sm:border-slate-200 sm:dark:border-white/[0.08] sm:pl-3 h-8">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/20">
+              {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
             </div>
-            <div className="hidden md:block text-left truncate max-w-28">
-              <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-none mb-0.5">{user?.name || "Admin"}</p>
-              <span className="text-[9px] text-slate-500 font-semibold uppercase leading-none">{user?.role || "SUPER_ADMIN"}</span>
+            <div className="hidden xl:block text-left truncate max-w-28">
+              <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-none mb-0.5">
+                {user?.name || "Admin"}
+              </p>
+              <span className="text-[9px] text-blue-500 font-bold uppercase tracking-wider leading-none">
+                {user?.role?.replace("_", " ") || "SUPER ADMIN"}
+              </span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Cmd + K Command Palette Overlay */}
+      {/* Cmd + K Command Palette Modal */}
       <AnimatePresence>
         {showSearchModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-start justify-center pt-16 sm:pt-24 p-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-start justify-center pt-16 sm:pt-24 p-4">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 text-slate-900 dark:text-slate-100"
+              initial={{ scale: 0.96, opacity: 0, y: -10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: -10 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white dark:bg-[#091024] rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-white/[0.1] space-y-4 text-slate-900 dark:text-slate-100"
             >
-              {/* Search Header */}
-              <div className="relative flex items-center border-b border-slate-200 dark:border-slate-800 pb-4">
-                <Search className="w-5 h-5 text-blue-600 dark:text-blue-400 absolute left-2" />
+              {/* Search Input */}
+              <div className="relative flex items-center border-b border-slate-200 dark:border-white/[0.08] pb-4">
+                <Search className="w-5 h-5 text-blue-500 absolute left-2" />
                 <input
                   type="text"
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Type to search lenders, companies, pincodes, leads..."
+                  placeholder="Search lenders, companies, pincodes, leads..."
                   className="w-full bg-transparent pl-10 pr-10 text-slate-900 dark:text-white text-sm font-semibold placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
                 />
                 {query ? (
-                  <button onClick={() => setQuery("")} className="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">
+                  <button
+                    onClick={() => setQuery("")}
+                    className="absolute right-2 text-slate-400 hover:text-white cursor-pointer"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 ) : (
-                  <button onClick={() => setShowSearchModal(false)} className="absolute right-2 text-[10px] text-slate-500 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5 hover:text-slate-800 dark:hover:text-white cursor-pointer">
+                  <button
+                    onClick={() => setShowSearchModal(false)}
+                    className="absolute right-2 text-[10px] text-slate-500 border border-slate-300 dark:border-white/[0.1] rounded-md px-2 py-0.5 hover:text-white cursor-pointer"
+                  >
                     ESC
                   </button>
                 )}
@@ -255,11 +323,15 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
               {/* Search Results Display */}
               <div className="max-h-96 overflow-y-auto space-y-4 pr-1 text-xs">
                 {searching ? (
-                  <div className="py-12 text-center text-slate-500 dark:text-slate-400 font-semibold flex items-center justify-center gap-2">
+                  <div className="py-12 text-center text-slate-400 font-semibold flex items-center justify-center gap-2">
                     <Activity className="w-4 h-4 text-blue-500 animate-spin" />
-                    <span>Searching system records...</span>
+                    <span>Searching multi-entity records...</span>
                   </div>
-                ) : query && !searchResults.banks.length && !searchResults.companies.length && !searchResults.pincodes.length && !searchResults.leads.length ? (
+                ) : query &&
+                  !searchResults.banks.length &&
+                  !searchResults.companies.length &&
+                  !searchResults.pincodes.length &&
+                  !searchResults.leads.length ? (
                   <div className="py-12 text-center text-slate-500 font-semibold">
                     No matching records found across system
                   </div>
@@ -268,19 +340,27 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                     {/* Banks Section */}
                     {searchResults.banks.length > 0 && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Banks & NBFCs</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Banks &amp; NBFCs
+                        </span>
                         {searchResults.banks.map((b) => (
                           <div
                             key={b.id}
                             onClick={() => navigateTo("/banks")}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 hover:bg-blue-50 dark:hover:bg-royal/10 border border-slate-200 dark:border-slate-850 hover:border-blue-300 dark:hover:border-royal/30 cursor-pointer transition-colors"
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
                           >
-                            <div className="flex items-center space-x-2.5">
-                              <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">{b.name}</span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">({b.code})</span>
+                            <div className="flex items-center space-x-3">
+                              <Building2 className="w-4 h-4 text-blue-400" />
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {b.name}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                ({b.code})
+                              </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 uppercase font-semibold">{b.type}</span>
+                            <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                              {b.type}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -289,18 +369,24 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                     {/* Companies Section */}
                     {searchResults.companies.length > 0 && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Companies</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Companies
+                        </span>
                         {searchResults.companies.map((c) => (
                           <div
                             key={c.id}
                             onClick={() => navigateTo("/companies")}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 hover:bg-blue-50 dark:hover:bg-royal/10 border border-slate-200 dark:border-slate-850 hover:border-blue-300 dark:hover:border-royal/30 cursor-pointer transition-colors"
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
                           >
-                            <div className="flex items-center space-x-2.5">
-                              <Building className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">{c.name}</span>
+                            <div className="flex items-center space-x-3">
+                              <Building className="w-4 h-4 text-emerald-400" />
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {c.name}
+                              </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 font-mono">{c.cin || "NO CIN"}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {c.cin || "NO CIN"}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -309,19 +395,27 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                     {/* Pincodes Section */}
                     {searchResults.pincodes.length > 0 && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Pincodes</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Pincodes
+                        </span>
                         {searchResults.pincodes.map((p) => (
                           <div
                             key={p.id}
                             onClick={() => navigateTo("/pincodes")}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 hover:bg-blue-50 dark:hover:bg-royal/10 border border-slate-200 dark:border-slate-850 hover:border-blue-300 dark:hover:border-royal/30 cursor-pointer transition-colors"
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
                           >
-                            <div className="flex items-center space-x-2.5">
-                              <MapPin className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                              <span className="font-bold text-slate-900 dark:text-white font-mono">{p.pincode}</span>
-                              <span className="text-slate-600 dark:text-slate-400 font-semibold">{p.city}, {p.state}</span>
+                            <div className="flex items-center space-x-3">
+                              <MapPin className="w-4 h-4 text-amber-400" />
+                              <span className="font-bold text-slate-900 dark:text-white font-mono">
+                                {p.pincode}
+                              </span>
+                              <span className="text-slate-400 font-medium">
+                                {p.city}, {p.state}
+                              </span>
                             </div>
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">{p.isServiceable ? "Serviceable" : "Unserviceable"}</span>
+                            <span className="text-[10px] text-emerald-400 font-bold">
+                              {p.isServiceable ? "Serviceable" : "Unserviceable"}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -330,19 +424,27 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                     {/* CRM Leads Section */}
                     {searchResults.leads.length > 0 && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">CRM Leads</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          CRM Leads
+                        </span>
                         {searchResults.leads.map((l) => (
                           <div
                             key={l.id}
                             onClick={() => navigateTo("/crm/leads")}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 hover:bg-blue-50 dark:hover:bg-royal/10 border border-slate-200 dark:border-slate-850 hover:border-blue-300 dark:hover:border-royal/30 cursor-pointer transition-colors"
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
                           >
-                            <div className="flex items-center space-x-2.5">
-                              <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">{l.name}</span>
-                              <span className="text-slate-500 dark:text-slate-400 text-[10px] font-mono">({l.mobile})</span>
+                            <div className="flex items-center space-x-3">
+                              <Users className="w-4 h-4 text-purple-400" />
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {l.name}
+                              </span>
+                              <span className="text-slate-500 text-[10px] font-mono">
+                                ({l.mobile})
+                              </span>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold uppercase">{l.status}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold uppercase">
+                              {l.status}
+                            </span>
                           </div>
                         ))}
                       </div>

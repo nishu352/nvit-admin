@@ -36,7 +36,6 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
 
   // checking = true until initial checkAuth() finishes
   const [checking, setChecking] = useState(true);
-  const [redirecting, setRedirecting] = useState(false);
 
   // ── Step 1: Run auth check once on mount ────────────────────────────────
   useEffect(() => {
@@ -47,6 +46,16 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, [checkAuth]);
+
+  // ── Handle custom auth redirect events from apiClient / useAuthStore ────
+  useEffect(() => {
+    const handleAuthRedirect = (e: Event) => {
+      const { path } = (e as CustomEvent<{ path: string }>).detail;
+      router.replace(path);
+    };
+    window.addEventListener("admin:auth:redirect", handleAuthRedirect);
+    return () => window.removeEventListener("admin:auth:redirect", handleAuthRedirect);
+  }, [router]);
 
   // ── Step 2: Apply role/page CSS classes to <html> safely ───────────────
   useEffect(() => {
@@ -67,32 +76,26 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
   }, [user, pathname]);
 
   // ── Step 3: Handle redirects in useEffect ───────────────────────────────
+  const shouldRedirectToDashboard = !checking && pathname === "/" && isAuthenticated && Boolean(user);
+  const shouldRedirectToLogin = !checking && pathname !== "/" && (!isAuthenticated || !user);
+  const isRedirecting = shouldRedirectToDashboard || shouldRedirectToLogin;
+
   useEffect(() => {
-    if (checking) return;
-
-    if (pathname === "/" && isAuthenticated && user) {
-      setRedirecting(true);
+    if (shouldRedirectToDashboard) {
       router.replace("/dashboard");
-      return;
-    }
-
-    if (pathname !== "/" && (!isAuthenticated || !user)) {
-      setRedirecting(true);
+    } else if (shouldRedirectToLogin) {
       router.replace("/");
-      return;
     }
-
-    setRedirecting(false);
-  }, [checking, isAuthenticated, user, pathname, router]);
+  }, [shouldRedirectToDashboard, shouldRedirectToLogin, router]);
 
   // ── Initial Loading state (only when user session is not yet loaded) ────
-  const showInitialLoading = (!user && checking) || (!user && isLoading) || (!user && redirecting);
+  const showInitialLoading = (!user && checking) || (!user && isLoading) || (!user && isRedirecting);
   if (showInitialLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 text-royal animate-spin" />
-        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-          {redirecting ? "Redirecting..." : "Restoring secure session..."}
+      <div className="min-h-screen bg-slate-50 dark:bg-[#040813] flex flex-col items-center justify-center space-y-4 text-slate-800 dark:text-slate-200">
+        <Loader2 className="w-10 h-10 text-blue-600 dark:text-blue-400 animate-spin" />
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+          {isRedirecting ? "Redirecting..." : "Restoring secure session..."}
         </p>
       </div>
     );
@@ -110,25 +113,25 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
 
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 selection:bg-royal text-white">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl text-center space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/20">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#040813] p-6 selection:bg-blue-600 text-slate-900 dark:text-white">
+        <div className="w-full max-w-md bg-white dark:bg-[#060c1c] border border-slate-200 dark:border-white/[0.08] rounded-3xl p-8 sm:p-10 shadow-2xl text-center space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto border border-rose-500/20">
             <ShieldAlert className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-black text-white tracking-tight">
+            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
               Access Restricted
             </h1>
-            <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
               Your current role{" "}
-              <span className="text-rose-400 font-black">({user?.role})</span>{" "}
+              <span className="text-rose-600 dark:text-rose-400 font-black">({user?.role})</span>{" "}
               does not have privileges to view{" "}
-              <span className="font-mono text-slate-200">{pathname}</span>.
+              <span className="font-mono text-slate-800 dark:text-slate-200">{pathname}</span>.
             </p>
           </div>
-          <div className="pt-4 border-t border-slate-800">
+          <div className="pt-4 border-t border-slate-100 dark:border-white/[0.06]">
             <button
-              className="w-full h-11 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="btn-secondary w-full h-11 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
               onClick={() => router.push("/dashboard")}
             >
               <ArrowLeft className="w-4 h-4 shrink-0" />

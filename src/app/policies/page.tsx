@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
-import { usePoliciesQuery, useBanksQuery, ADMIN_QUERY_KEYS } from "@/hooks/useAdminQueries";
-import { useQueryClient } from "@tanstack/react-query";
+import { usePoliciesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
 import {
-  FileCheck,
+  FileSpreadsheet,
   Plus,
   Edit2,
   Trash2,
@@ -14,28 +13,44 @@ import {
   RotateCcw,
   Search,
   CheckCircle,
+  Building2,
+  Percent,
+  DollarSign,
+  ShieldCheck,
+  Calendar,
+  X,
+  FileCheck,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
+import type { Policy, Bank } from "@/types";
 
 export default function AdminPoliciesPage() {
-  const queryClient = useQueryClient();
   const [selectedBankId, setSelectedBankId] = useState("");
   const [page, setPage] = useState(1);
+  const { showToast } = useToast();
 
-  const { data: policiesData, isLoading: loading, refetch: fetchPolicies } = usePoliciesQuery(selectedBankId || undefined, page);
+  const { data: policiesData, isLoading: loading, refetch: fetchPolicies } = usePoliciesQuery(
+    selectedBankId || undefined,
+    page
+  );
   const { data: banks = [] } = useBanksQuery();
 
-  const policies: any[] = Array.isArray(policiesData) ? policiesData : policiesData?.items || [];
-  const totalPages: number = Array.isArray(policiesData) ? 1 : policiesData?.totalPages || 1;
+  const policies = (policiesData || []) as Policy[];
 
   // Modals & History Drawer
   const [showModal, setShowModal] = useState(false);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
-  const [editingPolicy, setEditingPolicy] = useState<any>(null);
-  const [activePolicyForHistory, setActivePolicyForHistory] = useState<any>(null);
+  const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Policy | null>(null);
+  const [activePolicyForHistory, setActivePolicyForHistory] = useState<Policy | null>(null);
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form Fields
   const [bankId, setBankId] = useState("");
@@ -78,30 +93,59 @@ export default function AdminPoliciesPage() {
     setShowModal(true);
   };
 
-  const openEditModal = (p: any) => {
+  const openEditModal = (p: Policy) => {
     setEditingPolicy(p);
     setBankId(p.bankId);
     setCompanyCategory(p.companyCategory);
-    setMinSalary(p.minSalary);
-    setMaxSalary(p.maxSalary);
-    setMinAge(p.minAge);
-    setMaxAge(p.maxAge);
-    setFoir(p.foir);
-    setMinCibil(p.minCibil);
-    setRoi(p.roi);
-    setProcessingFee(p.processingFee);
-    setMinLoanAmount(p.minLoanAmount);
-    setMaxLoanAmount(p.maxLoanAmount);
-    setMinTenure(p.minTenure);
-    setMaxTenure(p.maxTenure);
-    setEmploymentType(p.employmentType);
+    setMinSalary(p.minSalary ?? 25000);
+    setMaxSalary(p.maxSalary ?? 99999999);
+    setMinAge(p.minAge ?? 21);
+    setMaxAge(p.maxAge ?? 60);
+    setFoir(p.foir ?? 60.0);
+    setMinCibil(p.minCibil ?? 700);
+    setRoi(p.roi ?? 10.5);
+    setProcessingFee(p.processingFee ?? 1.0);
+    setMinLoanAmount(p.minLoanAmount ?? 100000);
+    setMaxLoanAmount(p.maxLoanAmount ?? 1500000);
+    setMinTenure(p.minTenure ?? 12);
+    setMaxTenure(p.maxTenure ?? 60);
+    setEmploymentType(p.employmentType ?? "SALARIED");
     setRequiredDocuments(p.requiredDocuments || "");
     setNotes(p.notes || "");
     setShowModal(true);
   };
 
+  const openHistoryDrawer = async (p: Policy) => {
+    setActivePolicyForHistory(p);
+    setShowHistoryDrawer(true);
+    setLoadingHistory(true);
+    try {
+      const res = await apiClient.get(`/admin/policies/${p.id}/history`);
+      if (res.data?.success) {
+        setHistoryList(res.data.data || []);
+      }
+    } catch {
+      setHistoryList([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleRestoreVersion = async (historyId: string) => {
+    if (!confirm("Are you sure you want to rollback to this policy revision?")) return;
+    try {
+      await apiClient.post(`/admin/policies/restore/${historyId}`);
+      showToast({ title: "Policy restored to selected version", type: "success" });
+      setShowHistoryDrawer(false);
+      fetchPolicies();
+    } catch {
+      showToast({ title: "Failed to restore version", type: "error" });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const payload = {
       bankId,
       companyCategory,
@@ -118,524 +162,489 @@ export default function AdminPoliciesPage() {
       minTenure: Number(minTenure),
       maxTenure: Number(maxTenure),
       employmentType,
-      requiredDocuments,
-      notes: notes || null,
+      requiredDocuments: requiredDocuments.trim() || undefined,
+      notes: notes.trim() || undefined,
     };
 
     try {
       if (editingPolicy) {
         await apiClient.put(`/admin/policies/${editingPolicy.id}`, payload);
+        showToast({ title: "Underwriting policy updated", type: "success" });
       } else {
         await apiClient.post("/admin/policies", payload);
+        showToast({ title: "Underwriting policy created", type: "success" });
       }
       setShowModal(false);
       fetchPolicies();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this credit policy?")) return;
-    try {
-      await apiClient.delete(`/admin/policies/${id}`);
-      fetchPolicies();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const viewHistory = async (policy: any) => {
-    setActivePolicyForHistory(policy);
-    setLoadingHistory(true);
-    setShowHistoryDrawer(true);
-    try {
-      const res = await apiClient.get(`/admin/policies/${policy.id}/history`);
-      if (res.data.success) {
-        setHistoryList(res.data.data);
-      }
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to save policy";
+      showToast({ title: msg, type: "error" });
     } finally {
-      setLoadingHistory(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleRollback = async (historyId: string) => {
-    if (!confirm("Are you sure you want to roll back this credit policy to the selected version?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsSubmitting(true);
     try {
-      await apiClient.post(`/admin/policies/${activePolicyForHistory.id}/rollback`, { historyId });
-      setShowHistoryDrawer(false);
+      await apiClient.delete(`/admin/policies/${deleteTarget.id}`);
+      showToast({ title: "Policy removed", type: "success" });
+      setDeleteTarget(null);
       fetchPolicies();
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to delete policy";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-900 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Credit Policy Matrix</h1>
+    <div className="space-y-7">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <FileSpreadsheet className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Underwriting Policy Matrix
+            </h1>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">Configure lending formulas, salary bands, CIBIL bounds, and interest rates</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Credit criteria, FOIR ratios, CIBIL thresholds, ROI bands, and historical audit revisions.
+          </p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="h-10 px-5 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-black shadow-lg shadow-royal/20 transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Define Policy Rule</span>
-        </button>
+
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button onClick={openAddModal} className="btn-primary h-10 px-4 text-xs">
+            <Plus className="w-4 h-4" />
+            <span>Create Policy Rule</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex items-center space-x-3">
-        <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filter Bank:</span>
-        <select
-          value={selectedBankId}
-          onChange={(e) => {
-            setSelectedBankId(e.target.value);
-            setPage(1);
-          }}
-          className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 hover:border-slate-300 dark:hover:border-slate-800 text-slate-900 dark:text-slate-200 rounded-xl text-xs font-semibold focus:outline-none shadow-xs"
-        >
-          <option value="">All Banks &amp; NBFCs</option>
-          {banks.map((b: any) => (
-            <option key={b.id} value={b.id}>
-              {b.name} ({b.code})
-            </option>
-          ))}
-        </select>
+      {/* ── Filter Bar ───────────────────────────────────────── */}
+      <div className="glass-card p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <span className="text-xs font-bold text-slate-400">Select Lender Partner:</span>
+          <select
+            value={selectedBankId}
+            onChange={(e) => setSelectedBankId(e.target.value)}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+          >
+            <option value="">All Partner Lenders</option>
+            {banks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <span className="text-xs font-bold text-slate-500">
+          Showing {policies.length} Active Rules
+        </span>
       </div>
 
+      {/* ── Table Container ──────────────────────────────────── */}
       {loading ? (
-        <AdminTableSkeleton rows={6} columns={5} />
+        <AdminTableSkeleton rows={8} columns={6} />
+      ) : policies.length === 0 ? (
+        <div className="py-20 text-center glass-card rounded-3xl p-8 space-y-3">
+          <FileSpreadsheet className="w-12 h-12 text-slate-400 mx-auto stroke-1" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            No underwriting policies configured
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            {selectedBankId
+              ? "No policies exist for this lender partner."
+              : "Register your first credit policy rule."}
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6">
-          {policies.map((p: any) => (
-            <div key={p.id} className="glass-card rounded-2xl p-6 border border-slate-200 dark:border-slate-900 flex flex-col justify-between space-y-6 shadow-xs dark:shadow-xl">
-              {/* Title Bar */}
-              <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-900 pb-4">
-                <div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs font-mono font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-slate-950 px-2 py-0.5 rounded border border-blue-200 dark:border-slate-850">
-                      {p.bank.code}
-                    </span>
-                    <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">{p.bank.name} credit rules</h3>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-extrabold mt-1">
-                    Category classification: {p.companyCategory} • Employment: {p.employmentType}
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <span className="px-2.5 py-0.5 rounded text-[9px] font-black border bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-450 border-slate-200 dark:border-slate-850">
-                    Version {p.version}
-                  </span>
-                  <button
-                    onClick={() => viewHistory(p)}
-                    className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                    title="Version History"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => openEditModal(p)}
-                    className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 hover:border-slate-300 dark:hover:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                    title="Edit Policy"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 hover:border-rose-300 dark:hover:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-450 cursor-pointer"
-                    title="Delete Policy"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Detail Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-6 text-[11px] font-semibold text-slate-600 dark:text-slate-450">
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Salary Range</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">
-                    {p.minSalary ? `Min: ₹${(p.minSalary/1000)}k` : "No limit"}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Age Limits</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">{p.minAge || 21} - {p.maxAge || 60} Years</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">FOIR Limit</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">{p.foir}% max</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Min CIBIL</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">{p.minCibil || 700} score</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">ROI Rate</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">{p.roi}% p.a.</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Processing Fee</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">{p.processingFee || 1.0}%</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-900/60 text-[11px] font-semibold text-slate-600 dark:text-slate-450">
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Loan Range</div>
-                  <div className="text-slate-900 dark:text-white font-extrabold">
-                    ₹{(p.minLoanAmount/100000)}L - ₹{(p.maxLoanAmount/100000)}L (Tenure: {p.minTenure}-{p.maxTenure} mo)
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-550 mb-1">Required Documents</div>
-                  <div className="text-slate-700 dark:text-slate-300 font-extrabold truncate" title={p.requiredDocuments}>
-                    {p.requiredDocuments || "None listed"}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-900 pt-4 text-xs font-bold text-slate-600 dark:text-slate-450">
-              <span>Page {page} of {totalPages}</span>
-              <div className="flex items-center space-x-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-40 cursor-pointer transition-colors"
-                >
-                  Prev
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-40 cursor-pointer transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="admin-table-container">
+          <div className="overflow-x-auto">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Lender Partner</th>
+                  <th>Category Tier</th>
+                  <th>Rate (ROI) &amp; Fee</th>
+                  <th>Min Net Salary</th>
+                  <th>FOIR &amp; Min CIBIL</th>
+                  <th>Loan Amount Limits</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {policies.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <div className="space-y-0.5">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs block">
+                          {p.bank?.name || "Lender"}
+                        </span>
+                        <span className="text-[10px] font-mono text-blue-400 font-bold">
+                          {p.bank?.code || "CODE"}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="px-2.5 py-1 rounded text-[10px] font-black border font-mono bg-purple-500/10 text-purple-400 border-purple-500/20">
+                        {p.companyCategory}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="space-y-0.5">
+                        <span className="font-black text-slate-900 dark:text-white text-xs font-mono">
+                          {p.roi}% p.a.
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium block">
+                          Fee: {p.processingFee ?? 1.0}%
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="font-black text-slate-900 dark:text-white text-xs font-mono">
+                        {formatCurrency(p.minSalary)}/mo
+                      </span>
+                    </td>
+                    <td>
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-emerald-400">
+                          FOIR: {p.foir ?? 60}%
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-bold block">
+                          CIBIL: {p.minCibil ?? 700}+
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="space-y-0.5">
+                        <span className="font-mono text-xs text-slate-300 font-bold block">
+                          {formatCurrency(p.minLoanAmount ?? 100000)} - {formatCurrency(p.maxLoanAmount ?? 1500000)}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {p.minTenure ?? 12} to {p.maxTenure ?? 60} Mos
+                        </span>
+                      </div>
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <button
+                          onClick={() => openHistoryDrawer(p)}
+                          className="p-2 rounded-xl text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                          title="Revision History & Audit"
+                        >
+                          <History className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openEditModal(p)}
+                          className="p-2 rounded-xl text-slate-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer"
+                          title="Edit Policy"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(p)}
+                          className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title="Delete Policy"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* ── Add / Edit Policy Modal ──────────────────────────── */}
+      {showModal && (
+        <Modal
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          title={editingPolicy ? "Edit Underwriting Rule" : "Create Credit Policy Rule"}
+          description="Configure credit eligibility parameters, FOIR multipliers, and interest rates."
+          maxWidth="max-w-3xl"
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Partner Lender *</label>
+                <select
+                  value={bankId}
+                  onChange={(e) => setBankId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold rounded-xl focus:outline-none"
+                >
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Target Category Tier *</label>
+                <select
+                  value={companyCategory}
+                  onChange={(e) => setCompanyCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold rounded-xl focus:outline-none"
+                >
+                  <option value="SUPER A">SUPER A (Tier 1)</option>
+                  <option value="CAT A">CAT A (Prime)</option>
+                  <option value="CAT B">CAT B</option>
+                  <option value="CAT C">CAT C</option>
+                  <option value="CAT D">CAT D (Subprime)</option>
+                  <option value="UNLISTED">UNLISTED</option>
+                  <option value="GOVERNMENT">GOVERNMENT</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">ROI (% p.a.) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={roi}
+                  onChange={(e) => setRoi(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">FOIR Max Ratio (%) *</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  required
+                  value={foir}
+                  onChange={(e) => setFoir(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Min CIBIL Score *</label>
+                <input
+                  type="number"
+                  min={300}
+                  max={900}
+                  required
+                  value={minCibil}
+                  onChange={(e) => setMinCibil(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Min Net Salary / Month (₹) *</label>
+                <input
+                  type="number"
+                  required
+                  value={minSalary}
+                  onChange={(e) => setMinSalary(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Processing Fee (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={processingFee}
+                  onChange={(e) => setProcessingFee(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Min Loan Amount (₹)</label>
+                <input
+                  type="number"
+                  value={minLoanAmount}
+                  onChange={(e) => setMinLoanAmount(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Max Loan Amount (₹)</label>
+                <input
+                  type="number"
+                  value={maxLoanAmount}
+                  onChange={(e) => setMaxLoanAmount(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Min Tenure (Months)</label>
+                <input
+                  type="number"
+                  value={minTenure}
+                  onChange={(e) => setMinTenure(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Max Tenure (Months)</label>
+                <input
+                  type="number"
+                  value={maxTenure}
+                  onChange={(e) => setMaxTenure(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Required Documents List</label>
+              <input
+                type="text"
+                value={requiredDocuments}
+                onChange={(e) => setRequiredDocuments(e.target.value)}
+                placeholder="e.g. PAN, Aadhaar, 3 Months Payslip, 6 Months Bank Statement"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="btn-secondary h-10 px-4 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary h-10 px-5 text-xs font-bold"
+              >
+                {isSubmitting ? "Saving Policy..." : editingPolicy ? "Update Policy" : "Create Policy"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Policy Revision History Drawer ───────────────────── */}
       <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        {showHistoryDrawer && activePolicyForHistory && (
+          <div className="fixed inset-0 z-50 flex justify-end">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[90vh] space-y-6 text-slate-900 dark:text-slate-100"
-            >
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">{editingPolicy ? "Modify Credit Rule Set" : "Define Credit Rule Set"}</h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Bank */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Lender *</label>
-                    <select
-                      disabled={!!editingPolicy}
-                      value={bankId}
-                      onChange={(e) => setBankId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    >
-                      {banks.map((b: any) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Company Category */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Company Category Classification *</label>
-                    <select
-                      value={companyCategory}
-                      onChange={(e) => setCompanyCategory(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    >
-                      <option value="CAT A">Category A</option>
-                      <option value="CAT B">Category B</option>
-                      <option value="CAT C">Category C</option>
-                      <option value="CAT D">Category D</option>
-                      <option value="UNLISTED">Unlisted</option>
-                    </select>
-                  </div>
-
-                  {/* Salaries */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Min Salary Requirement (INR) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={minSalary}
-                      onChange={(e) => setMinSalary(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Max Salary Requirement (INR) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={maxSalary}
-                      onChange={(e) => setMaxSalary(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Age limits */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Min Age Requirement *</label>
-                    <input
-                      type="number"
-                      required
-                      value={minAge}
-                      onChange={(e) => setMinAge(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Max Age Requirement *</label>
-                    <input
-                      type="number"
-                      required
-                      value={maxAge}
-                      onChange={(e) => setMaxAge(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-
-                  {/* FOIR & CIBIL */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Max FOIR Threshold (%) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={foir}
-                      onChange={(e) => setFoir(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Minimum CIBIL Score *</label>
-                    <input
-                      type="number"
-                      required
-                      value={minCibil}
-                      onChange={(e) => setMinCibil(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-
-                  {/* ROI & Fee */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Interest Rate (ROI % p.a.) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={roi}
-                      onChange={(e) => setRoi(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Processing Fee (%) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={processingFee}
-                      onChange={(e) => setProcessingFee(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Loan limits */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Min Loan Amount (INR) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={minLoanAmount}
-                      onChange={(e) => setMinLoanAmount(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Max Loan Amount (INR) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={maxLoanAmount}
-                      onChange={(e) => setMaxLoanAmount(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Tenure limits */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Min Tenure (Months) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={minTenure}
-                      onChange={(e) => setMinTenure(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Max Tenure (Months) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={maxTenure}
-                      onChange={(e) => setMaxTenure(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Employment Type */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Eligible Employment Type *</label>
-                  <select
-                    value={employmentType}
-                    onChange={(e) => setEmploymentType(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  >
-                    <option value="SALARIED">Salaried Employee</option>
-                    <option value="SELF_EMPLOYED">Self-Employed Professional</option>
-                    <option value="BUSINESS">Business Owners</option>
-                  </select>
-                </div>
-
-                {/* Required Documents */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Document Checklist (Comma Separated) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={requiredDocuments}
-                    onChange={(e) => setRequiredDocuments(e.target.value)}
-                    placeholder="e.g. PAN, Aadhaar, Payslip"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
-                </div>
-
-                {/* Notes */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Internal Policy Notes / Cautions</label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Multiplier is 10x for Category A"
-                    className="w-full h-16 px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-royal hover:bg-royal-hover text-white text-xs font-bold cursor-pointer"
-                  >
-                    Save Policy Rules
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* History Drawer */}
-      <AnimatePresence>
-        {showHistoryDrawer && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex justify-end">
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHistoryDrawer(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            />
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              className="bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-850 w-full max-w-xl h-full p-6 sm:p-8 overflow-y-auto space-y-6 text-slate-900 dark:text-slate-100 flex flex-col justify-between"
+              transition={{ type: "spring", stiffness: 350, damping: 35 }}
+              className="relative z-10 w-full max-w-md bg-white dark:bg-[#060c1c] border-l border-slate-200 dark:border-white/[0.08] h-full shadow-2xl flex flex-col p-6 space-y-5"
             >
-              <div className="space-y-6">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-850 pb-4">
-                  <div>
-                    <h2 className="text-base font-black text-slate-900 dark:text-white">Policy Version Control</h2>
-                    <p className="text-[10px] text-slate-500 font-extrabold mt-0.5">
-                      Lender: {activePolicyForHistory?.bank.name} ({activePolicyForHistory?.companyCategory})
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowHistoryDrawer(false)}
-                    className="text-xs font-black text-slate-500 dark:text-slate-450 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                  >
-                    Close
-                  </button>
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.08] pb-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Policy Revision Trail
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {activePolicyForHistory.bank?.name} • {activePolicyForHistory.companyCategory}
+                  </p>
                 </div>
+                <button
+                  onClick={() => setShowHistoryDrawer(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                 {loadingHistory ? (
-                  <div className="py-20 text-center text-xs font-bold text-slate-400">Loading versions...</div>
+                  <p className="text-xs text-slate-400 text-center py-10">
+                    Loading historical revisions...
+                  </p>
                 ) : historyList.length === 0 ? (
-                  <div className="py-20 text-center text-xs font-semibold text-slate-500">
-                    No previous audit modifications recorded for this policy rule set.
-                  </div>
+                  <p className="text-xs text-slate-500 text-center py-10">
+                    No historical revisions found for this policy rule.
+                  </p>
                 ) : (
-                  <div className="space-y-4">
-                    {historyList.map((hist) => (
-                      <div key={hist.id} className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-850 space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-900 pb-2">
-                          <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Version {hist.version}</span>
-                          <span className="text-[9px] font-mono text-slate-500">{new Date(hist.createdAt).toLocaleString()}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400">
-                          <div>ROI: <span className="text-slate-900 dark:text-white font-extrabold">{hist.roi}%</span></div>
-                          <div>FOIR: <span className="text-slate-900 dark:text-white font-extrabold">{hist.foir}%</span></div>
-                          <div>Min CIBIL: <span className="text-slate-900 dark:text-white font-extrabold">{hist.minCibil}</span></div>
-                        </div>
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-450">
-                          <span>Modified By: {hist.changedByEmail || "System"}</span>
-                        </div>
+                  historyList.map((hist) => (
+                    <div
+                      key={hist.id}
+                      className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-mono text-[10px] text-slate-400">
+                          {formatDate(hist.createdAt)}
+                        </span>
+                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
+                          v{hist.version || 1}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-slate-300 font-medium space-y-1">
+                        <p>ROI: <strong className="text-white">{hist.roi}%</strong> • FOIR: <strong className="text-white">{hist.foir}%</strong></p>
+                        <p>Min Salary: <strong className="text-white">{formatCurrency(hist.minSalary)}</strong></p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] flex justify-end">
                         <button
-                          onClick={() => handleRollback(hist.id)}
-                          className="px-3 py-1 bg-royal/10 border border-royal/20 hover:border-royal/40 hover:bg-royal text-royal hover:text-white text-[9px] font-black rounded-md flex items-center gap-1 transition-all cursor-pointer"
+                          onClick={() => handleRestoreVersion(hist.id)}
+                          className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer"
                         >
-                          <RotateCcw className="w-3 h-3" />
+                          <RotateCcw className="w-3.5 h-3.5" />
                           <span>Rollback to this version</span>
                         </button>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))
                 )}
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-    </main>
+
+      {/* ── Delete Confirmation Dialog ───────────────────────── */}
+      {deleteTarget && (
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title="Delete Underwriting Policy?"
+          description={`Are you sure you want to delete the ${deleteTarget.companyCategory} policy rule for ${deleteTarget.bank?.name}? Automated loan eligibility calculations will no longer apply this rule.`}
+          confirmLabel="Delete Policy Rule"
+          isLoading={isSubmitting}
+        />
+      )}
+    </div>
   );
 }

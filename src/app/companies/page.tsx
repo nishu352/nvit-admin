@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useCompaniesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
 import {
@@ -23,12 +23,18 @@ import {
   Building2,
   X,
   PlusCircle,
-  AlertCircle,
   FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  ExternalLink,
 } from "lucide-react";
 import { getCategoryStatus } from "@/utils/categoryStatus";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
 import { formatDate } from "@/lib/utils";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
+import type { Company, Bank } from "@/types";
 
 const CATEGORY_TIERS = ["SUPER A", "CAT A", "CAT B", "CAT C", "CAT D", "NEGATIVE", "UNLISTED"];
 const STATUS_OPTIONS = ["APPROVED", "REJECTED", "REFERRAL", "EXCLUDED"];
@@ -37,11 +43,15 @@ export default function AdminCompaniesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { showToast } = useToast();
 
-  const { data: companiesData, isLoading: loading, refetch: fetchCompanies } = useCompaniesQuery(page, search);
+  const { data: companiesData, isLoading: loading, refetch: fetchCompanies } = useCompaniesQuery(
+    page,
+    search
+  );
   const { data: banks = [] } = useBanksQuery();
 
-  const companies = companiesData?.items || [];
+  const companies = (companiesData?.items || []) as Company[];
   const totalPages = companiesData?.totalPages || 1;
 
   // Modals
@@ -49,9 +59,10 @@ export default function AdminCompaniesPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
 
   // Active Company Edit State
-  const [editingCompany, setEditingCompany] = useState<any>(null);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [activeTab, setActiveTab] = useState<"DETAILS" | "BANKS">("DETAILS");
 
   // Form Fields for Edit / Add
@@ -87,6 +98,9 @@ export default function AdminCompaniesPage() {
   const [bulkStatus, setBulkStatus] = useState("APPROVED");
   const [bulkRemarks, setBulkRemarks] = useState("");
 
+  // Loading States
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Open Create Modal
   const openCreateModal = () => {
     setEditingCompany(null);
@@ -98,153 +112,183 @@ export default function AdminCompaniesPage() {
     setDistrict("");
     setStatus("ACTIVE");
     setCompanyBankCategories([]);
+    setActiveTab("DETAILS");
     setShowAddModal(true);
   };
 
-  // Open Comprehensive Edit Modal
-  const openEditModal = (comp: any) => {
-    setEditingCompany(comp);
-    setName(comp.name || "");
-    setCin(comp.cin || "");
-    setPincode(comp.pincode || "");
-    setCity(comp.city || "");
-    setState(comp.state || "");
-    setDistrict(comp.district || "");
-    setStatus(comp.status || "ACTIVE");
+  // Open Edit Modal
+  const openEditModal = async (company: Company) => {
+    setEditingCompany(company);
+    setName(company.name);
+    setCin(company.cin || "");
+    setPincode(company.pincode || "");
+    setCity(company.city || "");
+    setState(company.state || "");
+    setDistrict(company.district || "");
+    setStatus(company.status || "ACTIVE");
     setActiveTab("DETAILS");
 
-    // Map existing categories and prepare full bank list
-    const existingMap = new Map<string, any>();
-    (comp.bankCategories || []).forEach((bc: any) => {
-      if (bc.bank?.id) {
-        existingMap.set(bc.bank.id, {
-          bankId: bc.bank.id,
-          bankName: bc.bank.name,
-          bankCode: bc.bank.code,
-          category: bc.category || "CAT A",
-          status: bc.status || "APPROVED",
-          remarks: bc.remarks || "",
-        });
+    try {
+      const res = await apiClient.get(`/admin/companies/${company.id}`);
+      if (res.data?.success && res.data.data) {
+        const cData = res.data.data;
+        const mapped = (cData.companyCategories || []).map((cc: any) => ({
+          bankId: cc.bankId,
+          bankName: cc.bank?.name || "Unknown Bank",
+          bankCode: cc.bank?.code || "CODE",
+          category: cc.category,
+          status: cc.status,
+          remarks: cc.remarks || "",
+        }));
+        setCompanyBankCategories(mapped);
       }
-    });
+    } catch {
+      setCompanyBankCategories([]);
+    }
 
-    // Populate bank categories for all active partner banks
-    const initialCategories: any[] = [];
-    banks.forEach((b: any) => {
-      const existing = existingMap.get(b.id);
-      if (existing) {
-        initialCategories.push(existing);
-      } else {
-        initialCategories.push({
-          bankId: b.id,
-          bankName: b.name,
-          bankCode: b.code,
-          category: "UNLISTED",
-          status: "APPROVED",
-          remarks: "",
-        });
-      }
-    });
-
-    setCompanyBankCategories(initialCategories);
     setShowEditModal(true);
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  // Save / Update Company
+  const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
-      await apiClient.post("/admin/companies", {
-        name,
-        cin: cin || undefined,
-        pincode: pincode || undefined,
-        city: city || undefined,
-        state: state || undefined,
-      });
-      setShowAddModal(false);
-      fetchCompanies();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to create company");
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCompany) return;
-
-    try {
-      await apiClient.put(`/admin/companies/${editingCompany.id}`, {
-        name,
-        cin: cin || null,
-        pincode: pincode || null,
-        city: city || null,
-        state: state || null,
-        district: district || null,
+      const payload = {
+        name: name.trim(),
+        cin: cin.trim() || undefined,
+        pincode: pincode.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        district: district.trim() || undefined,
         status,
-        bankCategories: companyBankCategories.map((c) => ({
-          bankId: c.bankId,
-          category: c.category,
-          status: c.status,
-          remarks: c.remarks || undefined,
-          delete: c.delete || false,
-        })),
-      });
-      setShowEditModal(false);
+        categories: companyBankCategories
+          .filter((c) => !c.delete)
+          .map((c) => ({
+            bankId: c.bankId,
+            category: c.category,
+            status: c.status,
+            remarks: c.remarks,
+          })),
+      };
+
+      if (editingCompany) {
+        await apiClient.put(`/admin/companies/${editingCompany.id}`, payload);
+        showToast({ title: "Company updated successfully", type: "success" });
+        setShowEditModal(false);
+      } else {
+        await apiClient.post("/admin/companies", payload);
+        showToast({ title: "Company created successfully", type: "success" });
+        setShowAddModal(false);
+      }
       fetchCompanies();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to update company");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to save company";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this company? All bank classifications will be permanently removed!")) return;
+  // Delete Company
+  const handleDeleteCompany = async () => {
+    if (!deleteTarget) return;
+    setIsSubmitting(true);
     try {
-      await apiClient.delete(`/admin/companies/${id}`);
+      await apiClient.delete(`/admin/companies/${deleteTarget.id}`);
+      showToast({ title: "Company deleted successfully", type: "success" });
+      setDeleteTarget(null);
       fetchCompanies();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to delete company");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Delete failed";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleMerge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mergeSourceId === mergeTargetId) {
-      alert("Source and target companies cannot be the same!");
-      return;
-    }
+  // Bulk Assign Handler
+  const handleBulkAssign = async () => {
+    if (!bulkBankId || selectedIds.length === 0) return;
+    setIsSubmitting(true);
     try {
-      await apiClient.post("/admin/companies/merge", { sourceId: mergeSourceId, targetId: mergeTargetId });
-      setShowMergeModal(false);
-      setMergeSourceId("");
-      setMergeTargetId("");
-      fetchCompanies();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Merge execution failed");
-    }
-  };
-
-  const handleBulkAssign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiClient.post("/admin/companies/bulk-category", {
+      await apiClient.post("/admin/companies/bulk-assign-category", {
         companyIds: selectedIds,
         bankId: bulkBankId,
         category: bulkCategory,
         status: bulkStatus,
-        remarks: bulkRemarks || null,
+        remarks: bulkRemarks.trim() || undefined,
+      });
+      showToast({
+        title: `Updated category for ${selectedIds.length} companies`,
+        type: "success",
       });
       setShowBulkModal(false);
       setSelectedIds([]);
       fetchCompanies();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Bulk category update failed");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Bulk update failed";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  // Merge Handler
+  const handleMergeCompanies = async () => {
+    if (!mergeSourceId || !mergeTargetId || mergeSourceId === mergeTargetId) {
+      showToast({ title: "Select two different companies to merge", type: "warning" });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await apiClient.post("/admin/companies/merge", {
+        sourceCompanyId: mergeSourceId,
+        targetCompanyId: mergeTargetId,
+      });
+      showToast({ title: "Companies merged successfully", type: "success" });
+      setShowMergeModal(false);
+      setMergeSourceId("");
+      setMergeTargetId("");
+      fetchCompanies();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Merge operation failed";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Add Bank Category Row in Company Edit
+  const handleAddBankCategory = (bank: Bank) => {
+    if (companyBankCategories.some((c) => c.bankId === bank.id && !c.delete)) return;
+    setCompanyBankCategories((prev) => [
+      ...prev,
+      {
+        bankId: bank.id,
+        bankName: bank.name,
+        bankCode: bank.code,
+        category: "CAT A",
+        status: "APPROVED",
+        remarks: "",
+        isModified: true,
+      },
+    ]);
   };
 
   const toggleSelectAll = () => {
     if (selectedIds.length === companies.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(companies.map((c: any) => c.id));
+      setSelectedIds(companies.map((c) => c.id));
     }
   };
 
@@ -254,55 +298,42 @@ export default function AdminCompaniesPage() {
     );
   };
 
-  const updateCategoryItem = (bankId: string, field: string, value: any) => {
-    setCompanyBankCategories((prev) =>
-      prev.map((item) => (item.bankId === bankId ? { ...item, [field]: value, isModified: true } : item))
-    );
-  };
-
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Building className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Company Management</h1>
+    <div className="space-y-7">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <Building className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Enterprise Company Directory
+            </h1>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">
-            Search, edit employer profiles, manage multi-bank policy tiers, and deduplicate records
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Employer records, multi-bank tier category matrices, deduplication, and CIN indexing.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {selectedIds.length > 0 && (
-            <button
-              onClick={() => setShowBulkModal(true)}
-              className="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/20 transition-colors flex items-center gap-2 cursor-pointer"
-            >
-              <Layers className="w-4 h-4" />
-              <span>Bulk Categorize ({selectedIds.length})</span>
-            </button>
-          )}
+
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
             onClick={() => setShowMergeModal(true)}
-            className="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
+            className="btn-secondary h-10 px-4 text-xs font-bold"
           >
-            <Merge className="w-4 h-4" />
-            <span>Merge Records</span>
+            <Merge className="w-3.5 h-3.5" />
+            <span>Merge Entities</span>
           </button>
-          <button
-            onClick={openCreateModal}
-            className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-600/20 transition-colors flex items-center gap-2 cursor-pointer"
-          >
+          <button onClick={openCreateModal} className="btn-primary h-10 px-4 text-xs">
             <Plus className="w-4 h-4" />
-            <span>Register Company</span>
+            <span>Register Employer</span>
           </button>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="relative flex-1 w-full">
+      {/* ── Search & Bulk Controls ───────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 glass-card p-4 rounded-2xl">
+        <div className="relative w-full sm:w-96">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -311,556 +342,595 @@ export default function AdminCompaniesPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Search by company name, normalized query, or CIN..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
+            placeholder="Search by company name, CIN, or city..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors"
           />
         </div>
-        <button
-          onClick={() => fetchCompanies()}
-          className="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Refresh</span>
-        </button>
+
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <span className="text-xs font-bold text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-xl border border-purple-500/20">
+              {selectedIds.length} Selected
+            </span>
+            <button
+              onClick={() => setShowBulkModal(true)}
+              className="btn-secondary h-9 px-3.5 text-xs font-bold"
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-400" />
+              <span>Bulk Assign Category</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Table */}
+      {/* ── Table Container ──────────────────────────────────── */}
       {loading ? (
         <AdminTableSkeleton rows={8} columns={5} />
+      ) : companies.length === 0 ? (
+        <div className="py-20 text-center glass-card rounded-3xl p-8 space-y-3">
+          <Building className="w-12 h-12 text-slate-400 mx-auto stroke-1" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            No corporate employers found
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            {search
+              ? "No companies match your search query."
+              : "Register your first employer entity or upload via Excel."}
+          </p>
+        </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <div className="admin-table-container">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="admin-table">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
-                  <th className="p-4 w-10">
-                    <button onClick={toggleSelectAll} className="cursor-pointer">
-                      {selectedIds.length > 0 && selectedIds.length === companies.length ? (
-                        <CheckSquare className="w-4 h-4 text-blue-600" />
+                <tr>
+                  <th className="w-12">
+                    <button
+                      onClick={toggleSelectAll}
+                      className="cursor-pointer text-slate-400 hover:text-white"
+                    >
+                      {selectedIds.length === companies.length ? (
+                        <CheckSquare className="w-4 h-4 text-purple-400" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-400" />
+                        <Square className="w-4 h-4" />
                       )}
                     </button>
                   </th>
-                  <th className="p-4">Company Details</th>
-                  <th className="p-4">Location</th>
-                  <th className="p-4">Bank Classifications</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th>Company Details</th>
+                  <th>CIN Identifier</th>
+                  <th>Location</th>
+                  <th>Bank Category Matrix</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {companies.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
-                      No companies found matching the search criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  companies.map((company: any) => (
-                    <tr key={company.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4">
-                        <button onClick={() => toggleSelectOne(company.id)} className="cursor-pointer">
-                          {selectedIds.includes(company.id) ? (
-                            <CheckSquare className="w-4 h-4 text-blue-600" />
+              <tbody>
+                {companies.map((comp) => {
+                  const isSelected = selectedIds.includes(comp.id);
+                  const cats = comp.companyCategories || [];
+
+                  return (
+                    <tr
+                      key={comp.id}
+                      className={isSelected ? "bg-purple-500/5 dark:bg-purple-500/10" : ""}
+                    >
+                      <td>
+                        <button
+                          onClick={() => toggleSelectOne(comp.id)}
+                          className="cursor-pointer text-slate-400 hover:text-white"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-purple-400" />
                           ) : (
-                            <Square className="w-4 h-4 text-slate-400" />
+                            <Square className="w-4 h-4" />
                           )}
                         </button>
                       </td>
-                      <td className="p-4">
-                        <div className="font-extrabold text-slate-900 dark:text-white leading-tight">{company.name}</div>
-                        <div className="text-[10px] font-mono text-slate-500 font-bold mt-0.5">
-                          {company.cin ? `CIN: ${company.cin}` : `NORM: ${company.normalizedName || "—"}`}
+                      <td>
+                        <div className="space-y-0.5">
+                          <span className="font-extrabold text-slate-900 dark:text-white text-xs block">
+                            {comp.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Indexed: {formatDate(comp.createdAt)}
+                          </span>
                         </div>
                       </td>
-                      <td className="p-4 text-slate-600 dark:text-slate-300 font-medium">
-                        {company.city || company.state ? `${company.city || ""} ${company.state ? `, ${company.state}` : ""}` : "—"}
-                        {company.pincode && <span className="block text-[10px] font-mono text-slate-400 font-bold">PIN: {company.pincode}</span>}
+                      <td>
+                        <span className="font-mono text-xs text-blue-400 font-bold">
+                          {comp.cin || "NO CIN"}
+                        </span>
                       </td>
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-1.5 max-w-md">
-                          {(!company.bankCategories || company.bankCategories.length === 0) ? (
-                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20 text-[10px] font-bold">
-                              UNLISTED
+                      <td>
+                        <div className="flex items-center gap-1 text-xs text-slate-400 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>
+                            {comp.city || "—"}, {comp.state || "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-1.5 max-w-xs">
+                          {cats.length === 0 ? (
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              Unmapped
                             </span>
                           ) : (
-                            company.bankCategories.map((bc: any) => {
-                              const visual = getCategoryStatus(bc.category);
-                              return (
-                                <span
-                                  key={bc.id || `${company.id}-${bc.bank?.code}`}
-                                  className={`px-2 py-0.5 rounded border text-[10px] font-extrabold flex items-center gap-1 ${visual.badgeClass}`}
-                                >
-                                  <span className="opacity-75">{bc.bank?.code}:</span>
-                                  <span className="font-black">{bc.category}</span>
-                                </span>
-                              );
-                            })
+                            cats.slice(0, 3).map((cc, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-white/[0.04] border border-white/[0.08] text-slate-300"
+                              >
+                                {cc.bank?.code || "BANK"}:{" "}
+                                <strong className="text-purple-400">{cc.category}</strong>
+                              </span>
+                            ))
+                          )}
+                          {cats.length > 3 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-500">
+                              +{cats.length - 3} more
+                            </span>
                           )}
                         </div>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => openEditModal(company)}
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
-                            title="Edit Company &amp; Bank Policies"
+                            onClick={() => openEditModal(comp)}
+                            className="p-2 rounded-xl text-slate-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer"
+                            title="Edit Company & Category Matrix"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(company.id)}
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-rose-600 hover:border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                            onClick={() => setDeleteTarget(comp)}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                             title="Delete Company"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="bg-slate-50 dark:bg-slate-950 px-6 py-4 flex items-center justify-between border-t border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400">
-              <span>Page {page} of {totalPages}</span>
-              <div className="flex items-center space-x-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-40 cursor-pointer"
-                >
-                  Prev
-                </button>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-40 cursor-pointer"
-                >
-                  Next
-                </button>
-              </div>
+          {/* Pagination Bar */}
+          <div className="p-4 border-t border-slate-200 dark:border-white/[0.08] flex items-center justify-between">
+            <span className="text-xs text-slate-400 font-semibold">
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="btn-secondary h-8 px-3 text-xs disabled:opacity-30"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="btn-secondary h-8 px-3 text-xs disabled:opacity-30"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Comprehensive Edit Company Modal */}
-      <AnimatePresence>
-        {showEditModal && editingCompany && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh] text-slate-900 dark:text-slate-100"
+      {/* ── Add / Edit Company Modal ──────────────────────────── */}
+      {(showAddModal || showEditModal) && (
+        <Modal
+          open={showAddModal || showEditModal}
+          onClose={() => {
+            setShowAddModal(false);
+            setShowEditModal(false);
+          }}
+          title={editingCompany ? `Edit: ${editingCompany.name}` : "Register Employer Entity"}
+          description="Configure company legal identifiers and multi-bank underwriting categories."
+          maxWidth="max-w-2xl"
+        >
+          {/* Tabs */}
+          <div className="flex border-b border-slate-100 dark:border-white/[0.08] mb-5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("DETAILS")}
+              className={`pb-3 px-4 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+                activeTab === "DETAILS"
+                  ? "border-purple-500 text-purple-400"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
             >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <Building className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-black text-slate-900 dark:text-white">Edit Company &amp; Bank Policies</h2>
-                    <span className="text-[10px] font-mono text-slate-500 font-bold uppercase">{editingCompany.name}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 bg-white dark:bg-slate-900">
-                <button
-                  onClick={() => setActiveTab("DETAILS")}
-                  className={`py-3 px-4 text-xs font-black border-b-2 transition-colors cursor-pointer ${
-                    activeTab === "DETAILS"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  Company Attributes
-                </button>
-                <button
-                  onClick={() => setActiveTab("BANKS")}
-                  className={`py-3 px-4 text-xs font-black border-b-2 transition-colors cursor-pointer flex items-center gap-2 ${
-                    activeTab === "BANKS"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <span>Bank Categorizations</span>
-                  <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
-                    {companyBankCategories.filter((c) => !c.delete && c.category !== "UNLISTED").length} Active
-                  </span>
-                </button>
-              </div>
-
-              {/* Form Body */}
-              <form onSubmit={handleUpdate} className="overflow-y-auto p-6 space-y-5 flex-1">
-                {activeTab === "DETAILS" ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Company Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-extrabold uppercase text-slate-900 dark:text-white focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">CIN (Corporate Identity Number)</label>
-                      <input
-                        type="text"
-                        value={cin}
-                        onChange={(e) => setCin(e.target.value)}
-                        placeholder="e.g. L72200KA1981PLC013115"
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono uppercase text-slate-900 dark:text-white focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Postal Pincode</label>
-                      <input
-                        type="text"
-                        value={pincode}
-                        onChange={(e) => setPincode(e.target.value)}
-                        placeholder="e.g. 110001"
-                        maxLength={6}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono text-slate-900 dark:text-white focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">City</label>
-                      <input
-                        type="text"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder="e.g. Mumbai"
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">State</label>
-                      <input
-                        type="text"
-                        value={state}
-                        onChange={(e) => setState(e.target.value)}
-                        placeholder="e.g. Maharashtra"
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Status</label>
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
-                      >
-                        <option value="ACTIVE">ACTIVE</option>
-                        <option value="INACTIVE">INACTIVE</option>
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      Configure credit policy classification tier, approval state, and custom lending remarks for each partner bank.
-                    </p>
-                    <div className="space-y-3">
-                      {companyBankCategories.map((cat) => (
-                        <div
-                          key={cat.bankId}
-                          className={`p-4 rounded-2xl border transition-all ${
-                            cat.delete
-                              ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 opacity-60"
-                              : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-blue-600" />
-                              <span className="font-extrabold text-xs text-slate-900 dark:text-white">{cat.bankName}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[9px] font-bold uppercase text-slate-700 dark:text-slate-300">
-                                {cat.bankCode}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {cat.delete ? (
-                                <button
-                                  type="button"
-                                  onClick={() => updateCategoryItem(cat.bankId, "delete", false)}
-                                  className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold cursor-pointer"
-                                >
-                                  Undo Removal
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => updateCategoryItem(cat.bankId, "delete", true)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                                  title="Unmap this bank"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {!cat.delete && (
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-slate-500">Category Tier</label>
-                                <select
-                                  value={cat.category}
-                                  onChange={(e) => updateCategoryItem(cat.bankId, "category", e.target.value)}
-                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                                >
-                                  {CATEGORY_TIERS.map((tier) => (
-                                    <option key={tier} value={tier}>
-                                      {tier}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-slate-500">Approval Status</label>
-                                <select
-                                  value={cat.status}
-                                  onChange={(e) => updateCategoryItem(cat.bankId, "status", e.target.value)}
-                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                                >
-                                  {STATUS_OPTIONS.map((st) => (
-                                    <option key={st} value={st}>
-                                      {st}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-slate-500">Policy Notes / Remarks</label>
-                                <input
-                                  type="text"
-                                  value={cat.remarks || ""}
-                                  onChange={(e) => updateCategoryItem(cat.bankId, "remarks", e.target.value)}
-                                  placeholder="e.g. Standard Policy"
-                                  className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-white"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Modal Footer */}
-                <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-lg shadow-blue-600/20 cursor-pointer"
-                  >
-                    Save All Changes
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+              Entity Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("BANKS")}
+              className={`pb-3 px-4 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+                activeTab === "BANKS"
+                  ? "border-purple-500 text-purple-400"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              Bank Tier Matrix ({companyBankCategories.filter((c) => !c.delete).length})
+            </button>
           </div>
-        )}
-      </AnimatePresence>
 
-      {/* Add Company Modal */}
-      <AnimatePresence>
-        {showAddModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-slate-900 dark:text-slate-100"
-            >
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">Register Company Index</h2>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Company Name *</label>
+          <form onSubmit={handleSaveCompany} className="space-y-4">
+            {activeTab === "DETAILS" ? (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Company Name *</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. INFOSYS LTD"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold uppercase text-slate-900 dark:text-white focus:outline-none"
+                    placeholder="e.g. Tata Consultancy Services Ltd"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-purple-500"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Corporate CIN (Optional)</label>
-                  <input
-                    type="text"
-                    value={cin}
-                    onChange={(e) => setCin(e.target.value)}
-                    placeholder="e.g. L72200KA1981PLC013115"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono uppercase text-slate-900 dark:text-white focus:outline-none"
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
-                  >
-                    Save Company
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
-      {/* Merge Modal */}
-      <AnimatePresence>
-        {showMergeModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-slate-900 dark:text-slate-100"
-            >
-              <div className="flex items-center gap-2">
-                <Merge className="w-5 h-5 text-purple-600" />
-                <h2 className="text-lg font-black">Merge Duplicate Records</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">CIN Identifier</label>
+                    <input
+                      type="text"
+                      value={cin}
+                      onChange={(e) => setCin(e.target.value.toUpperCase())}
+                      placeholder="e.g. L22210MH1995PLC084781"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-mono font-bold placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">Registered Pincode</label>
+                    <input
+                      type="text"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      placeholder="e.g. 400001"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">City</label>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="e.g. Mumbai"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300">State</label>
+                    <input
+                      type="text"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      placeholder="e.g. Maharashtra"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <form onSubmit={handleMerge} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Duplicate (Source) ID *</label>
-                  <input
-                    type="text"
-                    required
-                    value={mergeSourceId}
-                    onChange={(e) => setMergeSourceId(e.target.value)}
-                    placeholder="Paste duplicate ID"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
-                  />
+            ) : (
+              <div className="space-y-4">
+                {/* Available Banks selector */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/[0.06]">
+                  <span className="text-xs font-bold text-slate-300">Add Lender Mapping:</span>
+                  <div className="flex gap-2">
+                    <select
+                      onChange={(e) => {
+                        const b = banks.find((item) => item.id === e.target.value);
+                        if (b) handleAddBankCategory(b);
+                        e.target.value = "";
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+                    >
+                      <option value="">+ Choose Partner Bank</option>
+                      {banks.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Master (Target) ID *</label>
-                  <input
-                    type="text"
-                    required
-                    value={mergeTargetId}
-                    onChange={(e) => setMergeTargetId(e.target.value)}
-                    placeholder="Paste master ID"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowMergeModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold"
-                  >
-                    Run Merge
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
-      {/* Bulk Assign Modal */}
-      <AnimatePresence>
-        {showBulkModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-slate-900 dark:text-slate-100"
-            >
-              <h2 className="text-lg font-black">Bulk Categorize ({selectedIds.length} Companies)</h2>
-              <form onSubmit={handleBulkAssign} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Target Lender *</label>
-                  <select
-                    required
-                    value={bulkBankId}
-                    onChange={(e) => setBulkBankId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold"
-                  >
-                    <option value="">Select Bank / NBFC</option>
-                    {banks.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.code})
-                      </option>
-                    ))}
-                  </select>
+                {/* Categories List */}
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                  {companyBankCategories.filter((c) => !c.delete).length === 0 ? (
+                    <p className="text-slate-500 py-6 text-center text-xs">
+                      No partner bank classifications attached yet.
+                    </p>
+                  ) : (
+                    companyBankCategories
+                      .filter((c) => !c.delete)
+                      .map((cat, idx) => (
+                        <div
+                          key={cat.bankId}
+                          className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-3"
+                        >
+                          <div>
+                            <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                              {cat.bankName}
+                            </h4>
+                            <span className="text-[10px] font-mono text-blue-400">
+                              {cat.bankCode}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={cat.category}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCompanyBankCategories((prev) =>
+                                  prev.map((item) =>
+                                    item.bankId === cat.bankId
+                                      ? { ...item, category: val, isModified: true }
+                                      : item
+                                  )
+                                );
+                              }}
+                              className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold"
+                            >
+                              {CATEGORY_TIERS.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={cat.status}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCompanyBankCategories((prev) =>
+                                  prev.map((item) =>
+                                    item.bankId === cat.bankId
+                                      ? { ...item, status: val, isModified: true }
+                                      : item
+                                  )
+                                );
+                              }}
+                              className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold"
+                            >
+                              {STATUS_OPTIONS.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCompanyBankCategories((prev) =>
+                                  prev.map((item) =>
+                                    item.bankId === cat.bankId
+                                      ? { ...item, delete: true }
+                                      : item
+                                  )
+                                );
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-400 cursor-pointer"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Category Tier</label>
-                  <select
-                    value={bulkCategory}
-                    onChange={(e) => setBulkCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold"
-                  >
-                    {CATEGORY_TIERS.map((tier) => (
-                      <option key={tier} value={tier}>
-                        {tier}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkModal(false)}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold"
-                  >
-                    Apply Bulk Tier
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setShowEditModal(false);
+                }}
+                className="btn-secondary h-10 px-4 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary h-10 px-5 text-xs font-bold"
+              >
+                {isSubmitting
+                  ? "Saving Company..."
+                  : editingCompany
+                  ? "Update Company"
+                  : "Register Company"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Bulk Assign Modal ─────────────────────────────────── */}
+      {showBulkModal && (
+        <Modal
+          open={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          title={`Bulk Assign Category (${selectedIds.length} Companies)`}
+          description="Batch attach or override a specific bank category tier for selected companies."
+        >
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Target Partner Bank *</label>
+              <select
+                value={bulkBankId}
+                onChange={(e) => setBulkBankId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+              >
+                <option value="">Select Target Bank</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Category Tier</label>
+                <select
+                  value={bulkCategory}
+                  onChange={(e) => setBulkCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+                >
+                  {CATEGORY_TIERS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">Underwriting Status</label>
+                <select
+                  value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setShowBulkModal(false)}
+                className="btn-secondary h-10 px-4 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!bulkBankId || isSubmitting}
+                onClick={handleBulkAssign}
+                className="btn-primary h-10 px-5 text-xs font-bold"
+              >
+                {isSubmitting ? "Assigning..." : "Apply Category to Selection"}
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
-    </main>
+        </Modal>
+      )}
+
+      {/* ── Merge Companies Modal ─────────────────────────────── */}
+      {showMergeModal && (
+        <Modal
+          open={showMergeModal}
+          onClose={() => setShowMergeModal(false)}
+          title="Merge Duplicate Company Records"
+          description="Consolidate duplicate employers into a single canonical record and rebind bank categories."
+        >
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <span>
+                All category bindings from the source company will be merged into the target company,
+                and the source company will be permanently purged.
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">
+                Source Company (Duplicate to be deleted) *
+              </label>
+              <select
+                value={mergeSourceId}
+                onChange={(e) => setMergeSourceId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+              >
+                <option value="">Select Source Company</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.cin ? `(${c.cin})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">
+                Target Company (Canonical master record to keep) *
+              </label>
+              <select
+                value={mergeTargetId}
+                onChange={(e) => setMergeTargetId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
+              >
+                <option value="">Select Target Company</option>
+                {companies
+                  .filter((c) => c.id !== mergeSourceId)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.cin ? `(${c.cin})` : ""}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setShowMergeModal(false)}
+                className="btn-secondary h-10 px-4 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!mergeSourceId || !mergeTargetId || isSubmitting}
+                onClick={handleMergeCompanies}
+                className="btn-primary h-10 px-5 text-xs font-bold"
+              >
+                {isSubmitting ? "Merging..." : "Execute Company Merge"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Delete Confirmation Dialog ───────────────────────── */}
+      {deleteTarget && (
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteCompany}
+          title={`Delete ${deleteTarget.name}?`}
+          description={`Are you sure you want to permanently remove ${deleteTarget.name}? All associated bank category mappings will be unlinked.`}
+          confirmLabel="Permanently Delete"
+          isLoading={isSubmitting}
+        />
+      )}
+    </div>
   );
 }

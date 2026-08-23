@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import {
-  TrendingUp,
+  Megaphone,
   Save,
   CheckCircle2,
   Code,
   Search,
   Tag,
   ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  Globe,
+  Share2,
 } from "lucide-react";
 import { AdminFormSkeleton } from "@/components/AdminSkeleton";
+import { useToast } from "@/components/ui/Toast";
 
 export default function AdminMarketingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState(false);
+  const { showToast } = useToast();
 
   // Marketing Tracking Fields
   const [googleAdsId, setGoogleAdsId] = useState("");
@@ -72,194 +77,225 @@ export default function AdminMarketingPage() {
   const handleSaveMarketing = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setSuccessMsg(false);
 
     const payload = {
-      googleAds: { adsId: googleAdsId, label: googleAdsConversionLabel },
-      analytics: { ga4Id: ga4PropertyId, gtmId: gtmContainerId },
-      meta: { pixelId: metaPixelId },
-      seo: { title: metaTitle, description: metaDescription, keywords: metaKeywords },
-      customScripts: { head: headScript },
+      googleAds: { adsId: googleAdsId.trim(), label: googleAdsConversionLabel.trim() },
+      analytics: { ga4Id: ga4PropertyId.trim(), gtmId: gtmContainerId.trim() },
+      meta: { pixelId: metaPixelId.trim() },
+      seo: {
+        title: metaTitle.trim(),
+        description: metaDescription.trim(),
+        keywords: metaKeywords.trim(),
+      },
+      customScripts: { head: headScript.trim() },
     };
 
     try {
       const res = await apiClient.put("/admin/marketing", payload);
       if (res.data.success) {
-        setSuccessMsg(true);
-        setTimeout(() => setSuccessMsg(false), 4000);
+        showToast({ title: "Marketing and SEO telemetry updated!", type: "success" });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Save failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <main className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-900 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">SEO &amp; Marketing Tracker Control</h1>
+    <div className="space-y-7 max-w-5xl mx-auto">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <Megaphone className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Marketing, Ads &amp; SEO Engine
+            </h1>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">Configure Google Ads conversion tags, GA4 properties, Meta Pixel tracking, and SEO meta headers</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Configure Google Ads conversions, GA4 / GTM telemetry, Meta Pixel events, and global SEO metatags.
+          </p>
         </div>
-        <button
-          onClick={handleSaveMarketing}
-          disabled={saving}
-          className="h-10 px-5 rounded-xl bg-royal hover:bg-royal-hover disabled:opacity-50 text-white text-xs font-black shadow-lg shadow-royal/20 transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <Save className="w-4 h-4" />
-          <span>{saving ? "Saving Configurations..." : "Save Tracking Config"}</span>
-        </button>
-      </div>
 
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span>Marketing tracking tags and SEO meta headers updated successfully!</span>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={handleSaveMarketing}
+            disabled={saving}
+            className="btn-primary h-10 px-5 text-xs font-bold"
+          >
+            <Save className={`w-3.5 h-3.5 ${saving ? "animate-spin" : ""}`} />
+            <span>{saving ? "Saving Config..." : "Save Marketing Telemetry"}</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {loading ? (
         <AdminFormSkeleton />
       ) : (
-        <form onSubmit={handleSaveMarketing} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-          {/* Analytics & Ad Pixels */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6">
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Analytics &amp; Tag Containers</h2>
+        <form onSubmit={handleSaveMarketing} className="space-y-6">
+          {/* ── Section 1: Ad Conversions & Analytics ─────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <TrendingUp className="w-5 h-5 text-blue-500" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                Ad Conversion Tracking &amp; Analytics
+              </h2>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Google Analytics 4 ID</label>
-                  <input
-                    type="text"
-                    value={ga4PropertyId}
-                    onChange={(e) => setGa4PropertyId(e.target.value)}
-                    placeholder="G-XXXXXXXXXX"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold uppercase focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Google Tag Manager Container</label>
-                  <input
-                    type="text"
-                    value={gtmContainerId}
-                    onChange={(e) => setGtmContainerId(e.target.value)}
-                    placeholder="GTM-XXXXXXX"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold uppercase focus:outline-none"
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Google Ads Conversion ID
+                </label>
+                <input
+                  type="text"
+                  value={googleAdsId}
+                  onChange={(e) => setGoogleAdsId(e.target.value)}
+                  placeholder="e.g. AW-1234567890"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Google Ads ID</label>
-                  <input
-                    type="text"
-                    value={googleAdsId}
-                    onChange={(e) => setGoogleAdsId(e.target.value)}
-                    placeholder="AW-XXXXXXXXX"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold uppercase focus:outline-none"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Google Ads Conversion Label
+                </label>
+                <input
+                  type="text"
+                  value={googleAdsConversionLabel}
+                  onChange={(e) => setGoogleAdsConversionLabel(e.target.value)}
+                  placeholder="e.g. AbCdEfGhIjKlMnOp"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Conversion Event Label</label>
-                  <input
-                    type="text"
-                    value={googleAdsConversionLabel}
-                    onChange={(e) => setGoogleAdsConversionLabel(e.target.value)}
-                    placeholder="e.g. AbC_dEfGhIjKlMnOp"
-                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  GA4 Measurement ID
+                </label>
+                <input
+                  type="text"
+                  value={ga4PropertyId}
+                  onChange={(e) => setGa4PropertyId(e.target.value)}
+                  placeholder="e.g. G-XXXXXXXXXX"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
+                />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Meta (Facebook) Pixel ID</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  GTM Container ID
+                </label>
+                <input
+                  type="text"
+                  value={gtmContainerId}
+                  onChange={(e) => setGtmContainerId(e.target.value)}
+                  placeholder="e.g. GTM-XXXXXXX"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Meta Pixel ID
+                </label>
                 <input
                   type="text"
                   value={metaPixelId}
                   onChange={(e) => setMetaPixelId(e.target.value)}
-                  placeholder="123456789012345"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="e.g. 1234567890123456"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* SEO Meta Headers */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6">
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <Search className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Page-Level SEO Meta Tags</h2>
+          {/* ── Section 2: Global SEO Metatags ────────────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <Search className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                Global SEO &amp; Social Graph Metadata
+              </h2>
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Meta Page Title *</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Global Meta Title
+                </label>
                 <input
                   type="text"
-                  required
                   value={metaTitle}
                   onChange={(e) => setMetaTitle(e.target.value)}
-                  placeholder="NVIT Solution | Institutional Bank Policy Comparison Platform"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="NVIT.SPACE | Check Loan Eligibility Across 50+ Banks Instantly"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Meta Description *</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Global Meta Description
+                </label>
                 <textarea
-                  required
+                  rows={3}
                   value={metaDescription}
                   onChange={(e) => setMetaDescription(e.target.value)}
-                  placeholder="Compare commercial bank policies, FOIR multipliers, and pincode coverage."
-                  className="w-full h-20 px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="Instant multi-lender credit underwriting, company category checks, and low-ROI personal loans in India."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Meta Keywords</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  SEO Keywords (Comma-Separated)
+                </label>
                 <input
                   type="text"
                   value={metaKeywords}
                   onChange={(e) => setMetaKeywords(e.target.value)}
-                  placeholder="bank policy, loan eligibility, foir calculator, personal loan"
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none"
+                  placeholder="personal loans, company category list, bank policies, credit underwriting, cibil check"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Custom Script Injector */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-2xl space-y-6 lg:col-span-2">
-            <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-850 pb-4">
-              <Code className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Custom Header Script Injector</h2>
+          {/* ── Section 3: Custom Head Scripts ────────────────────── */}
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.08] pb-4">
+              <Code className="w-5 h-5 text-amber-400" />
+              <h2 className="text-sm font-black text-slate-900 dark:text-white">
+                Custom Header HTML &amp; JavaScript Injection
+              </h2>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Head Injector HTML Snippet (&lt;head&gt;)</label>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                <span>Header Raw Snippet</span>
+                <span className="text-[10px] text-amber-400 font-mono">
+                  Injected into &lt;head&gt; across all public pages
+                </span>
+              </label>
               <textarea
+                rows={5}
                 value={headScript}
                 onChange={(e) => setHeadScript(e.target.value)}
-                placeholder="<!-- Inject custom script tags here -->"
-                className="w-full h-24 px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-emerald-600 dark:text-emerald-400 font-mono rounded-xl text-xs font-semibold focus:outline-none"
+                placeholder="<!-- Paste your custom tracking tag, Chatbot script, or verification code here -->"
+                className="w-full p-4 bg-slate-950 border border-slate-200 dark:border-white/[0.08] rounded-2xl text-xs font-mono text-emerald-400 focus:outline-none resize-none"
               />
             </div>
           </div>
         </form>
       )}
-    </main>
+    </div>
   );
 }
-

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useBanksQuery } from "@/hooks/useAdminQueries";
 import {
@@ -26,24 +26,37 @@ import {
   Upload,
   Link as LinkIcon,
   ExternalLink,
-  Check,
-  Globe,
+  Search,
+  ArrowRight,
   Sparkles,
+  Layers,
 } from "lucide-react";
 import { AdminCardGridSkeleton } from "@/components/AdminSkeleton";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
+import type { Bank } from "@/types";
 
 export default function AdminBanksPage() {
   const { data: banks = [], isLoading: loading, refetch: fetchBanks } = useBanksQuery();
-  const [showModal, setShowModal] = useState(false);
-  const [editingBank, setEditingBank] = useState<any>(null);
+  const { showToast } = useToast();
 
-  // Clear Companies / Pincodes Modal State
-  const [clearModalTarget, setClearModalTarget] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "BANK" | "NBFC">("ALL");
+
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [editingBank, setEditingBank] = useState<Bank | null>(null);
+
+  // Clear Companies / Pincodes State
+  const [clearModalTarget, setClearModalTarget] = useState<Bank | null>(null);
   const [clearType, setClearType] = useState<"COMPANIES" | "PINCODES">("COMPANIES");
   const [cleanOrphans, setCleanOrphans] = useState(true);
   const [confirmInput, setConfirmInput] = useState("");
   const [isClearing, setIsClearing] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Delete State
+  const [deleteTarget, setDeleteTarget] = useState<Bank | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form Fields for Add/Edit
   const [name, setName] = useState("");
@@ -62,7 +75,6 @@ export default function AdminBanksPage() {
   const [priority, setPriority] = useState(1);
   const [partnerStatus, setPartnerStatus] = useState("ACTIVE");
   const [displayOrder, setDisplayOrder] = useState(1);
-  const [eligibility, setEligibility] = useState("");
   const [processingFee, setProcessingFee] = useState(1.0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,16 +92,15 @@ export default function AdminBanksPage() {
     setPriority(1);
     setPartnerStatus("ACTIVE");
     setDisplayOrder(1);
-    setEligibility("");
     setProcessingFee(1.0);
     setShowModal(true);
   };
 
-  const openEditModal = (bank: any) => {
+  const openEditModal = (bank: Bank) => {
     setEditingBank(bank);
     setName(bank.name);
     setCode(bank.code);
-    setType(bank.type);
+    setType((bank.type as "BANK" | "NBFC") || "BANK");
     setLogoUrl(bank.logoUrl || "");
     setLogoMode(bank.logoUrl && bank.logoUrl.startsWith("http") ? "URL" : "UPLOAD");
     setLogoUploadError(null);
@@ -99,7 +110,6 @@ export default function AdminBanksPage() {
     setPriority(bank.priority || 1);
     setPartnerStatus(bank.partnerStatus || "ACTIVE");
     setDisplayOrder(bank.displayOrder || 1);
-    setEligibility(bank.eligibility || "");
     setProcessingFee(bank.processingFee || 1.0);
     setShowModal(true);
   };
@@ -108,709 +118,582 @@ export default function AdminBanksPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setLogoUploadError(null);
     setIsUploadingLogo(true);
-
+    setLogoUploadError(null);
     try {
       const formData = new FormData();
-      formData.append("file", file);
-
+      formData.append("logo", file);
       const res = await apiClient.post("/admin/banks/upload-logo", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-
-      if (res.data && res.data.success && res.data.url) {
-        setLogoUrl(res.data.url);
-      } else {
-        setLogoUploadError(res.data?.message || "Failed to upload logo");
+      if (res.data?.success && res.data.data?.url) {
+        setLogoUrl(res.data.data.url);
+        showToast({ title: "Logo uploaded successfully", type: "success" });
       }
-    } catch (err: any) {
-      setLogoUploadError(err.response?.data?.message || err.message || "Failed to upload file");
+    } catch {
+      setLogoUploadError("Logo upload failed. Please use valid JPG/PNG/SVG.");
     } finally {
       setIsUploadingLogo(false);
     }
   };
 
-  const validateUrlFormat = (url: string): boolean => {
-    const trimmed = url.trim();
-    if (!trimmed) return false;
-    return trimmed.startsWith("/") || trimmed.startsWith("http://") || trimmed.startsWith("https://");
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSaveBank = async (e: React.FormEvent) => {
     e.preventDefault();
-    setApplyUrlError(null);
-
-    // Validate Apply URL when Apply is ON
-    if (applyEnabled) {
-      if (!applyUrl.trim()) {
-        setApplyUrlError("Redirect URL is required when 'Apply for Loan' is enabled.");
-        return;
-      }
-      if (!validateUrlFormat(applyUrl)) {
-        setApplyUrlError("Invalid format! Redirect URL must start with https://, http://, or / (e.g. /loan-apply?bank=...)");
-        return;
-      }
+    if (applyEnabled && !applyUrl.trim()) {
+      setApplyUrlError("Apply URL is required when Direct Apply is enabled");
+      return;
     }
 
     setIsSubmitting(true);
-
-    const payload = {
-      name,
-      code,
-      type,
-      logoUrl: logoUrl.trim() || null,
-      applyEnabled: Boolean(applyEnabled),
-      applyUrl: applyEnabled ? applyUrl.trim() : (applyUrl.trim() || null),
-      priority: Number(priority),
-      partnerStatus,
-      displayOrder: Number(displayOrder),
-      eligibility,
-      processingFee: Number(processingFee),
-    };
-
     try {
+      const payload = {
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        type,
+        logoUrl: logoUrl.trim() || undefined,
+        applyEnabled,
+        applyUrl: applyUrl.trim() || undefined,
+        priority: Number(priority),
+        partnerStatus,
+        displayOrder: Number(displayOrder),
+        processingFee: Number(processingFee),
+      };
+
       if (editingBank) {
         await apiClient.put(`/admin/banks/${editingBank.id}`, payload);
+        showToast({ title: "Lender partner updated successfully", type: "success" });
       } else {
         await apiClient.post("/admin/banks", payload);
+        showToast({ title: "Lender partner created successfully", type: "success" });
       }
       setShowModal(false);
       fetchBanks();
-    } catch (err: any) {
-      setApplyUrlError(err.response?.data?.message || err.message || "Failed to save bank configuration");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Operation failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this lender? This will purge all associated company classifications and pincodes!")) return;
+  const handleToggleStatus = async (bank: Bank) => {
     try {
-      await apiClient.delete(`/admin/banks/${id}`);
-      fetchBanks();
-    } catch (err) {
-      console.error("Failed to delete bank", err);
-    }
-  };
-
-  const handleToggleActive = async (id: string) => {
-    try {
-      await apiClient.patch(`/admin/banks/${id}/toggle`);
-      fetchBanks();
-    } catch (err) {
-      console.error("Failed to toggle status", err);
-    }
-  };
-
-  const handleToggleApply = async (id: string) => {
-    try {
-      await apiClient.patch(`/admin/banks/${id}/toggle-apply`);
-      fetchBanks();
-    } catch (err) {
-      console.error("Failed to toggle apply status", err);
-    }
-  };
-
-  const openClearModal = (bank: any, type: "COMPANIES" | "PINCODES") => {
-    setClearModalTarget(bank);
-    setClearType(type);
-    setConfirmInput("");
-    setCleanOrphans(true);
-    setActionFeedback(null);
-  };
-
-  const handleExecuteWipe = async () => {
-    if (!clearModalTarget) return;
-    if (confirmInput.trim().toUpperCase() !== clearModalTarget.code.toUpperCase()) {
-      alert(`Please type "${clearModalTarget.code}" exactly to confirm deletion.`);
-      return;
-    }
-
-    setIsClearing(true);
-    setActionFeedback(null);
-
-    try {
-      if (clearType === "COMPANIES") {
-        const res = await apiClient.delete(`/admin/banks/${clearModalTarget.id}/data/companies?cleanOrphans=${cleanOrphans}`);
-        setActionFeedback({
-          success: true,
-          message: `Successfully deleted ${res.data.data.deletedMappings.toLocaleString()} company mappings${
-            cleanOrphans ? ` and purged ${res.data.data.deletedOrphans.toLocaleString()} orphaned companies` : ""
-          }.`,
-        });
-      } else {
-        const res = await apiClient.delete(`/admin/banks/${clearModalTarget.id}/data/pincodes`);
-        setActionFeedback({
-          success: true,
-          message: `Successfully purged ${res.data.data.deletedPincodes.toLocaleString()} pincode serviceability records.`,
-        });
-      }
-      fetchBanks();
-    } catch (err: any) {
-      setActionFeedback({
-        success: false,
-        message: err.response?.data?.message || err.message || "Operation failed",
+      const nextStatus = bank.isActive ? false : true;
+      await apiClient.patch(`/admin/banks/${bank.id}/status`, { isActive: nextStatus });
+      showToast({
+        title: `Lender ${bank.name} ${nextStatus ? "activated" : "deactivated"}`,
+        type: "info",
       });
+      fetchBanks();
+    } catch {
+      showToast({ title: "Failed to toggle status", type: "error" });
+    }
+  };
+
+  const handleDeleteBank = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await apiClient.delete(`/admin/banks/${deleteTarget.id}`);
+      showToast({ title: `${deleteTarget.name} deleted successfully`, type: "success" });
+      setDeleteTarget(null);
+      fetchBanks();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Delete failed";
+      showToast({ title: msg, type: "error" });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleClearBankData = async () => {
+    if (!clearModalTarget || confirmInput !== clearModalTarget.code) return;
+    setIsClearing(true);
+    try {
+      const endpoint =
+        clearType === "COMPANIES"
+          ? `/admin/banks/${clearModalTarget.id}/clear-companies`
+          : `/admin/banks/${clearModalTarget.id}/clear-pincodes`;
+
+      const res = await apiClient.post(endpoint, { cleanOrphans });
+      if (res.data?.success) {
+        showToast({
+          title: `Cleared ${clearType.toLowerCase()} data for ${clearModalTarget.name}`,
+          type: "success",
+        });
+        setClearModalTarget(null);
+        setConfirmInput("");
+        fetchBanks();
+      }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Clear operation failed";
+      showToast({ title: msg, type: "error" });
     } finally {
       setIsClearing(false);
     }
   };
 
+  // Filtered Banks
+  const filteredBanks = useMemo(() => {
+    return banks.filter((b) => {
+      const matchesSearch =
+        b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.code.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = typeFilter === "ALL" || b.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [banks, searchQuery, typeFilter]);
+
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Partner Banking Institutions</h1>
-          <p className="text-xs text-slate-500 font-medium">Manage lender metadata, Apply for Loan buttons, redirect destinations, and master datasets.</p>
+    <div className="space-y-7">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              Partner Lenders &amp; NBFCs
+            </h1>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-10.5">
+            Manage institutional partners, priority ordering, direct apply links, and underwriting matrix bindings.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
             onClick={() => fetchBanks()}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
-            title="Refresh Bank Matrix"
+            className="btn-secondary h-10 px-4 text-xs font-bold"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span>Sync Lenders</span>
           </button>
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center space-x-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer"
-          >
+          <button onClick={openAddModal} className="btn-primary h-10 px-4 text-xs">
             <Plus className="w-4 h-4" />
-            <span>Register Lender</span>
+            <span>Add Lender Partner</span>
           </button>
         </div>
       </div>
 
+      {/* ── Search & Filter Bar ──────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 glass-card p-4 rounded-2xl">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter by bank name or code..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {(["ALL", "BANK", "NBFC"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                typeFilter === t
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "bg-slate-100 dark:bg-white/[0.04] text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              {t === "ALL" ? `All (${banks.length})` : t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Lenders Grid ─────────────────────────────────────── */}
       {loading ? (
         <AdminCardGridSkeleton count={6} />
+      ) : filteredBanks.length === 0 ? (
+        <div className="py-20 text-center glass-card rounded-3xl p-8 space-y-3">
+          <Building2 className="w-12 h-12 text-slate-400 mx-auto stroke-1" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">No lender partners found</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            {searchQuery ? "No banks match your search criteria." : "Get started by registering your first banking partner."}
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {banks.map((bank: any) => (
-            <div key={bank.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
-              {/* Card Top */}
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredBanks.map((bank) => (
+            <motion.div
+              key={bank.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card rounded-2xl p-5 space-y-4 flex flex-col justify-between"
+            >
+              <div className="space-y-3.5">
+                {/* Card Top */}
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center space-x-3">
-                    <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-blue-600 dark:text-blue-400 shrink-0 overflow-hidden">
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] flex items-center justify-center p-1.5 overflow-hidden shrink-0">
                       {bank.logoUrl ? (
-                        <img src={bank.logoUrl} alt={bank.code} className="w-8 h-8 object-contain" />
+                        <img
+                          src={bank.logoUrl}
+                          alt={bank.name}
+                          className="w-full h-full object-contain"
+                        />
                       ) : (
-                        <span className="text-xs font-black uppercase font-mono">{bank.code?.slice(0, 3)}</span>
+                        <Building2 className="w-5 h-5 text-blue-500" />
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="font-extrabold text-slate-900 dark:text-white text-sm leading-tight mb-0.5 truncate">{bank.name}</h3>
-                      <span className="text-[10px] font-mono text-slate-500 font-bold uppercase tracking-wider">CODE: {bank.code} • Priority: {bank.priority || 1}</span>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                        {bank.name}
+                      </h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                          {bank.code}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400">
+                          {bank.type}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded text-[10px] font-black border shrink-0 ${
-                    bank.type === "BANK"
-                      ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/20"
-                      : "bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20"
-                  }`}>
-                    {bank.type}
+
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                      bank.isActive !== false ? "badge-emerald" : "badge-rose"
+                    }`}
+                  >
+                    {bank.isActive !== false ? "ACTIVE" : "INACTIVE"}
                   </span>
                 </div>
 
-                {/* Apply for Loan Configuration Highlight */}
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Apply for Loan</span>
-                    </div>
-                    <button
-                      onClick={() => handleToggleApply(bank.id)}
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 transition-all cursor-pointer ${
-                        bank.applyEnabled
-                          ? "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                          : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-750"
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${bank.applyEnabled ? "bg-emerald-500" : "bg-slate-400"}`} />
-                      <span>{bank.applyEnabled ? "ON" : "OFF"}</span>
-                    </button>
+                {/* Card Details Matrix */}
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02]">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">Priority Rank</span>
+                    <span className="text-xs font-black text-slate-900 dark:text-white mt-0.5 block font-mono">
+                      #{bank.priority || 1}
+                    </span>
                   </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02]">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">Proc. Fee</span>
+                    <span className="text-xs font-black text-slate-900 dark:text-white mt-0.5 block font-mono">
+                      {bank.processingFee || 1.0}%
+                    </span>
+                  </div>
+                </div>
 
-                  {bank.applyEnabled && bank.applyUrl && (
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate">
-                      <LinkIcon className="w-3 h-3 text-blue-500 shrink-0" />
-                      <span className="truncate">{bank.applyUrl}</span>
-                    </div>
+                {bank.applyEnabled && bank.applyUrl && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold truncate bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Direct Apply Active</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card Footer Actions */}
+              <div className="pt-3 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleToggleStatus(bank)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-blue-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  title={bank.isActive !== false ? "Deactivate" : "Activate"}
+                >
+                  {bank.isActive !== false ? (
+                    <ToggleRight className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <ToggleLeft className="w-5 h-5 text-slate-500" />
                   )}
-                </div>
+                </button>
 
-                <div className="space-y-2.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 pt-1">
-                  <div className="flex justify-between border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
-                    <span>Partner Status:</span>
-                    <span className={`font-black ${
-                      bank.partnerStatus === "ACTIVE" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500"
-                    }`}>{bank.partnerStatus || "ACTIVE"}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
-                    <span>Processing Fee:</span>
-                    <span className="font-extrabold text-slate-900 dark:text-white">{bank.processingFee || 1.0}%</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 dark:border-slate-800/80 pb-1.5 items-center">
-                    <span className="flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Mapped Companies:</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
-                      {(bank._count?.companyCategories ?? 0).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Pincode Coverage:</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs">
-                      {(bank._count?.pincodeServices ?? 0).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card Bottom / Actions */}
-              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={() => handleToggleActive(bank.id)}
-                    className="flex items-center space-x-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                    onClick={() => {
+                      setClearModalTarget(bank);
+                      setClearType("COMPANIES");
+                    }}
+                    className="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                    title="Clear Company Mappings"
                   >
-                    {bank.isActive ? (
-                      <>
-                        <ToggleRight className="w-5 h-5 text-emerald-500" />
-                        <span className="text-emerald-600 dark:text-emerald-400">Active</span>
-                      </>
-                    ) : (
-                      <>
-                        <ToggleLeft className="w-5 h-5 text-slate-400" />
-                        <span>Disabled</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => openEditModal(bank)}
-                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                      title="Edit Lender Configuration"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(bank.id)}
-                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                      title="Delete Lender"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Specialized Wipe Company & Pincode Data Buttons */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    onClick={() => openClearModal(bank, "COMPANIES")}
-                    className="h-8 px-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/50 flex items-center justify-center text-rose-700 dark:text-rose-300 transition-colors cursor-pointer text-[10px] font-bold gap-1"
-                    title="Purge all company categorization mappings for this specific bank"
-                  >
-                    <Flame className="w-3 h-3 text-rose-500" />
-                    <span>Wipe Companies</span>
+                    <FileSpreadsheet className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => openClearModal(bank, "PINCODES")}
-                    className="h-8 px-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center text-amber-700 dark:text-amber-300 transition-colors cursor-pointer text-[10px] font-bold gap-1"
-                    title="Purge all pincode serviceability records for this specific bank"
+                    onClick={() => {
+                      setClearModalTarget(bank);
+                      setClearType("PINCODES");
+                    }}
+                    className="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                    title="Clear Pincode Mappings"
                   >
-                    <Trash2 className="w-3 h-3 text-amber-500" />
-                    <span>Wipe Pincodes</span>
+                    <MapPin className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openEditModal(bank)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                    title="Edit Details"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(bank)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    title="Delete Lender"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
 
-      {/* Wipe Confirmation Modal */}
-      <AnimatePresence>
-        {clearModalTarget && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-rose-200 dark:border-rose-900/60 space-y-5 text-slate-900 dark:text-slate-100"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2.5 text-rose-600 dark:text-rose-400">
-                  <AlertTriangle className="w-5 h-5" />
-                  <h2 className="text-base font-black">
-                    Purge {clearType === "COMPANIES" ? "Company Master Data" : "Pincode Master Data"}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setClearModalTarget(null)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* ── Add / Edit Modal ─────────────────────────────────── */}
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingBank ? `Edit Partner: ${editingBank.name}` : "Register New Lender Partner"}
+        description="Configure institutional partner details, logo, underwriting priority, and apply redirects."
+      >
+        <form onSubmit={handleSaveBank} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Lender Name *</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. HDFC Bank"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
 
-              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl p-4 space-y-2">
-                <div className="text-xs font-black text-rose-900 dark:text-rose-200 flex items-center gap-2">
-                  <span>Target Lender: {clearModalTarget.name}</span>
-                  <span className="px-2 py-0.5 bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 rounded text-[10px] font-mono">
-                    {clearModalTarget.code}
-                  </span>
-                </div>
-                <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
-                  {clearType === "COMPANIES" ? (
-                    <>
-                      This will delete all <strong>{(clearModalTarget._count?.companyCategories ?? 0).toLocaleString()}</strong> company category mappings for <strong>{clearModalTarget.name}</strong> from the database. Other banks will NOT be affected.
-                    </>
-                  ) : (
-                    <>
-                      This will delete all <strong>{(clearModalTarget._count?.pincodeServices ?? 0).toLocaleString()}</strong> pincode serviceability records for <strong>{clearModalTarget.name}</strong>.
-                    </>
-                  )}
-                </p>
-              </div>
-
-              {clearType === "COMPANIES" && (
-                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cleanOrphans}
-                    onChange={(e) => setCleanOrphans(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="text-xs">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 block">Clean Orphaned Companies</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                      Also delete company records that have 0 remaining bank classifications across all lenders.
-                    </span>
-                  </div>
-                </label>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-wider">
-                  Type <span className="font-mono text-rose-600 dark:text-rose-400 font-black">{clearModalTarget.code}</span> to confirm:
-                </label>
-                <input
-                  type="text"
-                  value={confirmInput}
-                  onChange={(e) => setConfirmInput(e.target.value)}
-                  placeholder={`Type ${clearModalTarget.code} here`}
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono uppercase font-bold text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              {actionFeedback && (
-                <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                  actionFeedback.success
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                    : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                }`}>
-                  {actionFeedback.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                  <span>{actionFeedback.message}</span>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setClearModalTarget(null)}
-                  disabled={isClearing}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExecuteWipe}
-                  disabled={isClearing || confirmInput.trim().toUpperCase() !== clearModalTarget.code.toUpperCase()}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20"
-                >
-                  {isClearing ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Purging...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Confirm &amp; Wipe Data</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Bank Code *</label>
+              <input
+                type="text"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="e.g. HDFC"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-mono font-bold placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
           </div>
-        )}
-      </AnimatePresence>
 
-      {/* Add / Edit Lender Modal */}
-      <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-slate-900 dark:text-slate-100 my-8"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  {editingBank ? `Configure Lender: ${editingBank.name}` : "Register New Lender"}
-                </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Institution Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as "BANK" | "NBFC")}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none focus:border-blue-500"
+              >
+                <option value="BANK">Commercial Bank</option>
+                <option value="NBFC">NBFC Partner</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Priority Score</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={priority}
+                onChange={(e) => setPriority(Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Processing Fee (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={processingFee}
+                onChange={(e) => setProcessingFee(Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Logo Field */}
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-300">Lender Logo</label>
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  onClick={() => setLogoMode("UPLOAD")}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    logoMode === "UPLOAD" ? "bg-blue-600 text-white" : "text-slate-400"
+                  }`}
                 >
-                  <X className="w-4 h-4" />
+                  Upload File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLogoMode("URL")}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    logoMode === "URL" ? "bg-blue-600 text-white" : "text-slate-400"
+                  }`}
+                >
+                  Image URL
                 </button>
               </div>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* 1. Basic Lender Identification */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Institution Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. HDFC Bank Ltd"
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Unique Code *</label>
-                    <input
-                      type="text"
-                      required
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      placeholder="e.g. HDFC"
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold uppercase focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Institution Type</label>
-                    <select
-                      value={type}
-                      onChange={(e: any) => setType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="BANK">BANK (Commercial)</option>
-                      <option value="NBFC">NBFC (Financial Institution)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Processing Fee (%)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={processingFee}
-                      onChange={(e) => setProcessingFee(Number(e.target.value))}
-                      placeholder="1.0"
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 text-slate-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 2. Logo Upload & URL Configuration */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Lender Logo / Icon</span>
-                    </label>
-
-                    {/* Mode Toggle: Upload vs Image URL */}
-                    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-[10px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setLogoMode("UPLOAD")}
-                        className={`px-2.5 py-0.5 rounded-md transition-all ${
-                          logoMode === "UPLOAD"
-                            ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
-                            : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                      >
-                        Upload Logo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLogoMode("URL")}
-                        className={`px-2.5 py-0.5 rounded-md transition-all ${
-                          logoMode === "URL"
-                            ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
-                            : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                      >
-                        Image URL
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {/* Preview Box */}
-                    <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
-                      {logoUrl ? (
-                        <img src={logoUrl} alt="Preview" className="w-10 h-10 object-contain" />
-                      ) : (
-                        <Building2 className="w-6 h-6 text-slate-300 dark:text-slate-700" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 space-y-1.5">
-                      {logoMode === "UPLOAD" ? (
-                        <div className="space-y-1">
-                          <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-blue-400 dark:hover:border-blue-600 cursor-pointer shadow-sm transition-all">
-                            {isUploadingLogo ? (
-                              <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                            ) : (
-                              <Upload className="w-4 h-4 text-blue-600" />
-                            )}
-                            <span>{isUploadingLogo ? "Uploading to Storage..." : "Choose Image File (PNG, JPG, SVG)"}</span>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
-                              onChange={handleFileUpload}
-                              disabled={isUploadingLogo}
-                              className="hidden"
-                            />
-                          </label>
-                          {logoUrl && (
-                            <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 truncate">
-                              ✓ Attached: {logoUrl}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <input
-                          type="url"
-                          value={logoUrl}
-                          onChange={(e) => setLogoUrl(e.target.value)}
-                          placeholder="https://example.com/logo.png"
-                          className="w-full px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
-                        />
-                      )}
-
-                      {logoUploadError && (
-                        <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                          {logoUploadError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Apply for Loan Configuration Box */}
-                <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/60 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Apply for Loan Button</span>
-                      </label>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Enable or disable the customer loan application button for this specific lender across the frontend.
-                      </p>
-                    </div>
-
-                    {/* ON / OFF Switch */}
-                    <button
-                      type="button"
-                      onClick={() => setApplyEnabled(!applyEnabled)}
-                      className={`px-3 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
-                        applyEnabled
-                          ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                          : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${applyEnabled ? "bg-white animate-pulse" : "bg-slate-400"}`} />
-                      <span>{applyEnabled ? "ON" : "OFF"}</span>
-                    </button>
-                  </div>
-
-                  {/* Redirect URL Input */}
-                  <div className="space-y-1.5 pt-1">
-                    <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-wider flex items-center gap-1">
-                      <span>Redirect URL</span>
-                      {applyEnabled && <span className="text-rose-500">*</span>}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={applyUrl}
-                        onChange={(e) => {
-                          setApplyUrl(e.target.value);
-                          setApplyUrlError(null);
-                        }}
-                        placeholder="https://example.com/apply or /loan-apply?bank=HDFC"
-                        className={`w-full px-4 py-2.5 bg-white dark:bg-slate-900 border rounded-xl text-xs font-mono focus:outline-none ${
-                          applyUrlError
-                            ? "border-rose-500 text-rose-900 dark:text-rose-200"
-                            : "border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:border-blue-500"
-                        }`}
-                      />
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      Supports external websites (e.g. <code>https://partner.com/apply</code>) or internal portal paths (e.g. <code>/loan-apply?bank={code || "CODE"}</code>).
-                    </p>
-                    {applyUrlError && (
-                      <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{applyUrlError}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    disabled={isSubmitting}
-                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || isUploadingLogo}
-                    className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-bold transition-all shadow-lg shadow-blue-600/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Saving Configuration...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Save Configuration</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+            {logoMode === "UPLOAD" ? (
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white cursor-pointer"
+              />
+            ) : (
+              <input
+                type="url"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            )}
+            {logoUploadError && <p className="text-[11px] text-rose-400">{logoUploadError}</p>}
           </div>
-        )}
-      </AnimatePresence>
+
+          {/* Direct Apply URL Config */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-200 block">Direct Application Link</span>
+                <span className="text-[11px] text-slate-400">Route eligible borrowers directly to bank portal</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={applyEnabled}
+                onChange={(e) => setApplyEnabled(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+              />
+            </div>
+
+            {applyEnabled && (
+              <input
+                type="url"
+                required={applyEnabled}
+                value={applyUrl}
+                onChange={(e) => {
+                  setApplyUrl(e.target.value);
+                  setApplyUrlError(null);
+                }}
+                placeholder="https://partnerbank.com/apply-link"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            )}
+            {applyUrlError && <p className="text-[11px] text-rose-400">{applyUrlError}</p>}
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="btn-secondary h-10 px-4 text-xs font-bold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || isUploadingLogo}
+              className="btn-primary h-10 px-5 text-xs font-bold"
+            >
+              {isSubmitting ? "Saving Partner..." : editingBank ? "Update Partner" : "Create Partner"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── Clear Companies / Pincodes Action Modal ──────────── */}
+      {clearModalTarget && (
+        <Modal
+          open={Boolean(clearModalTarget)}
+          onClose={() => {
+            setClearModalTarget(null);
+            setConfirmInput("");
+          }}
+          title={`Purge ${clearType} for ${clearModalTarget.name}`}
+          description={`High-risk action: This will detach all associated ${clearType.toLowerCase()} records from ${clearModalTarget.name}.`}
+        >
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <span>
+                Type <strong className="font-mono text-white font-bold">{clearModalTarget.code}</strong> below to confirm detachment.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="cleanOrphans"
+                checked={cleanOrphans}
+                onChange={(e) => setCleanOrphans(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600"
+              />
+              <label htmlFor="cleanOrphans" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                Also purge unlinked orphan master records
+              </label>
+            </div>
+
+            <input
+              type="text"
+              value={confirmInput}
+              onChange={(e) => setConfirmInput(e.target.value)}
+              placeholder={`Enter "${clearModalTarget.code}" to proceed`}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-mono font-bold focus:outline-none focus:border-amber-500"
+            />
+
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => {
+                  setClearModalTarget(null);
+                  setConfirmInput("");
+                }}
+                className="btn-secondary h-10 px-4 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={confirmInput !== clearModalTarget.code || isClearing}
+                onClick={handleClearBankData}
+                className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
+              >
+                {isClearing ? "Purging Records..." : `Purge ${clearType}`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Delete Confirmation Dialog ───────────────────────── */}
+      {deleteTarget && (
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteBank}
+          title={`Delete ${deleteTarget.name}?`}
+          description={`Are you sure you want to permanently remove ${deleteTarget.name} (${deleteTarget.code})? All associated policy bindings will be unlinked.`}
+          confirmLabel="Permanently Delete"
+          isLoading={isDeleting}
+        />
+      )}
     </div>
   );
 }
