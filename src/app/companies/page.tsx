@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useCompaniesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Building,
   Search,
@@ -28,6 +29,9 @@ import {
   ChevronRight,
   MapPin,
   ExternalLink,
+  Loader2,
+  ShieldCheck,
+  Check,
 } from "lucide-react";
 import { getCategoryStatus } from "@/utils/categoryStatus";
 import { AdminTableSkeleton } from "@/components/AdminSkeleton";
@@ -36,18 +40,35 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import type { Company, Bank } from "@/types";
 
-const CATEGORY_TIERS = ["SUPER A", "CAT A", "CAT B", "CAT C", "CAT D", "NEGATIVE", "UNLISTED"];
 const STATUS_OPTIONS = ["APPROVED", "REJECTED", "REFERRAL", "EXCLUDED"];
+const SUGGESTED_CATEGORIES = [
+  "Preferred",
+  "Prime",
+  "Super Prime",
+  "Priority Partner",
+  "Strategic Partner",
+  "CAT A",
+  "CAT B",
+  "CAT C",
+  "CAT D",
+  "Tier 1",
+  "Tier 2",
+  "A+",
+  "Regular",
+  "Negative",
+  "Unlisted",
+];
 
 export default function AdminCompaniesPage() {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search.trim(), 450);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { showToast } = useToast();
 
-  const { data: companiesData, isLoading: loading, refetch: fetchCompanies } = useCompaniesQuery(
+  const { data: companiesData, isLoading: loading, isFetching, refetch: fetchCompanies } = useCompaniesQuery(
     page,
-    search
+    debouncedSearch
   );
   const { data: banks = [] } = useBanksQuery();
 
@@ -88,9 +109,12 @@ export default function AdminCompaniesPage() {
     }>
   >([]);
 
-  // Merge modal fields
-  const [mergeSourceId, setMergeSourceId] = useState("");
-  const [mergeTargetId, setMergeTargetId] = useState("");
+  // Multi-Company Merge State
+  const [mergeCandidates, setMergeCandidates] = useState<Company[]>([]);
+  const [canonicalTargetId, setCanonicalTargetId] = useState<string>("");
+  const [extraMergeSearch, setExtraMergeSearch] = useState("");
+  const [extraMergeResults, setExtraMergeResults] = useState<Company[]>([]);
+  const [isSearchingExtra, setIsSearchingExtra] = useState(false);
 
   // Bulk assign fields
   const [bulkBankId, setBulkBankId] = useState("");
@@ -132,12 +156,13 @@ export default function AdminCompaniesPage() {
       const res = await apiClient.get(`/admin/companies/${company.id}`);
       if (res.data?.success && res.data.data) {
         const cData = res.data.data;
-        const mapped = (cData.companyCategories || []).map((cc: any) => ({
+        const categoriesList = cData.bankCategories || cData.companyCategories || [];
+        const mapped = categoriesList.map((cc: any) => ({
           bankId: cc.bankId,
           bankName: cc.bank?.name || "Unknown Bank",
           bankCode: cc.bank?.code || "CODE",
-          category: cc.category,
-          status: cc.status,
+          category: cc.category || "CAT A",
+          status: cc.status || "APPROVED",
           remarks: cc.remarks || "",
         }));
         setCompanyBankCategories(mapped);
@@ -152,6 +177,10 @@ export default function AdminCompaniesPage() {
   // Save / Update Company
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) {
+      showToast({ title: "Company name is required", type: "error" });
+      return;
+    }
     setIsSubmitting(true);
     try {
       const payload = {
@@ -166,19 +195,19 @@ export default function AdminCompaniesPage() {
           .filter((c) => !c.delete)
           .map((c) => ({
             bankId: c.bankId,
-            category: c.category,
-            status: c.status,
-            remarks: c.remarks,
+            category: c.category.trim() || "CAT A",
+            status: c.status || "APPROVED",
+            remarks: c.remarks?.trim() || undefined,
           })),
       };
 
       if (editingCompany) {
         await apiClient.put(`/admin/companies/${editingCompany.id}`, payload);
-        showToast({ title: "Company updated successfully", type: "success" });
+        showToast({ title: "Company and bank categories updated successfully", type: "success" });
         setShowEditModal(false);
       } else {
         await apiClient.post("/admin/companies", payload);
-        showToast({ title: "Company created successfully", type: "success" });
+        showToast({ title: "Company and bank categories registered successfully", type: "success" });
         setShowAddModal(false);
       }
       fetchCompanies();
@@ -219,7 +248,7 @@ export default function AdminCompaniesPage() {
       await apiClient.post("/admin/companies/bulk-assign-category", {
         companyIds: selectedIds,
         bankId: bulkBankId,
-        category: bulkCategory,
+        category: bulkCategory.trim(),
         status: bulkStatus,
         remarks: bulkRemarks.trim() || undefined,
       });
@@ -240,22 +269,82 @@ export default function AdminCompaniesPage() {
     }
   };
 
-  // Merge Handler
-  const handleMergeCompanies = async () => {
-    if (!mergeSourceId || !mergeTargetId || mergeSourceId === mergeTargetId) {
-      showToast({ title: "Select two different companies to merge", type: "warning" });
+  // Open Multi-Company Merge Modal
+  const openMergeModal = () => {
+    const selected = companies.filter((c) => selectedIds.includes(c.id));
+    setMergeCandidates(selected);
+    setCanonicalTargetId(selected[0]?.id || "");
+    setExtraMergeSearch("");
+    setExtraMergeResults([]);
+    setShowMergeModal(true);
+  };
+
+  // Search extra company to add to merge candidate list
+  const handleSearchExtraMerge = async (q: string) => {
+    setExtraMergeSearch(q);
+    if (!q.trim() || q.trim().length < 2) {
+      setExtraMergeResults([]);
       return;
     }
+    setIsSearchingExtra(true);
+    try {
+      const res = await apiClient.get(`/admin/companies?limit=8&query=${encodeURIComponent(q.trim())}`);
+      const items = (res.data?.data?.items || []) as Company[];
+      setExtraMergeResults(items.filter((item) => !mergeCandidates.some((m) => m.id === item.id)));
+    } catch {
+      setExtraMergeResults([]);
+    } finally {
+      setIsSearchingExtra(false);
+    }
+  };
+
+  const addCandidateToMerge = (comp: Company) => {
+    if (!mergeCandidates.some((c) => c.id === comp.id)) {
+      const updated = [...mergeCandidates, comp];
+      setMergeCandidates(updated);
+      if (!canonicalTargetId) {
+        setCanonicalTargetId(comp.id);
+      }
+    }
+    setExtraMergeResults([]);
+    setExtraMergeSearch("");
+  };
+
+  const removeCandidateFromMerge = (id: string) => {
+    const updated = mergeCandidates.filter((c) => c.id !== id);
+    setMergeCandidates(updated);
+    if (canonicalTargetId === id) {
+      setCanonicalTargetId(updated[0]?.id || "");
+    }
+  };
+
+  // Multi-Company Merge Execution
+  const handleExecuteMerge = async () => {
+    if (mergeCandidates.length < 2) {
+      showToast({ title: "Please select at least 2 company records to merge", type: "warning" });
+      return;
+    }
+    if (!canonicalTargetId) {
+      showToast({ title: "Please select the canonical master company to keep", type: "warning" });
+      return;
+    }
+
+    const sourceIds = mergeCandidates.map((c) => c.id).filter((id) => id !== canonicalTargetId);
+    const targetComp = mergeCandidates.find((c) => c.id === canonicalTargetId);
+
     setIsSubmitting(true);
     try {
       await apiClient.post("/admin/companies/merge", {
-        sourceCompanyId: mergeSourceId,
-        targetCompanyId: mergeTargetId,
+        sourceCompanyIds: sourceIds,
+        targetCompanyId: canonicalTargetId,
       });
-      showToast({ title: "Companies merged successfully", type: "success" });
+      showToast({
+        title: `Merged ${sourceIds.length} duplicate records into "${targetComp?.name || "Canonical Record"}"`,
+        type: "success",
+      });
       setShowMergeModal(false);
-      setMergeSourceId("");
-      setMergeTargetId("");
+      setSelectedIds([]);
+      setMergeCandidates([]);
       fetchCompanies();
     } catch (err: unknown) {
       const msg =
@@ -267,7 +356,7 @@ export default function AdminCompaniesPage() {
     }
   };
 
-  // Add Bank Category Row in Company Edit
+  // Add Bank Category Row in Company Edit/Create
   const handleAddBankCategory = (bank: Bank) => {
     if (companyBankCategories.some((c) => c.bankId === bank.id && !c.delete)) return;
     setCompanyBankCategories((prev) => [
@@ -300,6 +389,13 @@ export default function AdminCompaniesPage() {
 
   return (
     <div className="space-y-7">
+      {/* ── Global Category Datalist for Custom Category Entry ── */}
+      <datalist id="category-suggestions">
+        {SUGGESTED_CATEGORIES.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+
       {/* ── Header ────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
         <div className="space-y-1">
@@ -318,11 +414,11 @@ export default function AdminCompaniesPage() {
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
-            onClick={() => setShowMergeModal(true)}
-            className="btn-secondary h-10 px-4 text-xs font-bold"
+            onClick={openMergeModal}
+            className="btn-secondary h-10 px-4 text-xs font-bold flex items-center gap-2"
           >
-            <Merge className="w-3.5 h-3.5" />
-            <span>Merge Entities</span>
+            <Merge className="w-3.5 h-3.5 text-purple-400" />
+            <span>Merge Entities {selectedIds.length > 1 ? `(${selectedIds.length})` : ""}</span>
           </button>
           <button onClick={openCreateModal} className="btn-primary h-10 px-4 text-xs">
             <Plus className="w-4 h-4" />
@@ -333,18 +429,46 @@ export default function AdminCompaniesPage() {
 
       {/* ── Search & Bulk Controls ───────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 glass-card p-4 rounded-2xl">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by company name, CIN, or city..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors"
-          />
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by company name, CIN, or city..."
+              className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              {(isFetching || search.trim() !== debouncedSearch) && (
+                <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+              )}
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
+                  className="p-0.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {debouncedSearch && !loading && (
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-md font-mono font-bold text-[11px]">
+                {companiesData?.total ?? companies.length} results
+              </span>
+            </div>
+          )}
         </div>
 
         {selectedIds.length > 0 && (
@@ -359,6 +483,15 @@ export default function AdminCompaniesPage() {
               <Layers className="w-3.5 h-3.5 text-purple-400" />
               <span>Bulk Assign Category</span>
             </button>
+            {selectedIds.length >= 2 && (
+              <button
+                onClick={openMergeModal}
+                className="btn-primary h-9 px-3.5 text-xs font-bold"
+              >
+                <Merge className="w-3.5 h-3.5" />
+                <span>Merge Selected</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -373,8 +506,8 @@ export default function AdminCompaniesPage() {
             No corporate employers found
           </h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            {search
-              ? "No companies match your search query."
+            {debouncedSearch
+              ? `No companies match "${debouncedSearch}".`
               : "Register your first employer entity or upload via Excel."}
           </p>
         </div>
@@ -389,7 +522,7 @@ export default function AdminCompaniesPage() {
                       onClick={toggleSelectAll}
                       className="cursor-pointer text-slate-400 hover:text-white"
                     >
-                      {selectedIds.length === companies.length ? (
+                      {selectedIds.length === companies.length && companies.length > 0 ? (
                         <CheckSquare className="w-4 h-4 text-purple-400" />
                       ) : (
                         <Square className="w-4 h-4" />
@@ -406,7 +539,7 @@ export default function AdminCompaniesPage() {
               <tbody>
                 {companies.map((comp) => {
                   const isSelected = selectedIds.includes(comp.id);
-                  const cats = comp.companyCategories || [];
+                  const cats = comp.companyCategories || comp.bankCategories || [];
 
                   return (
                     <tr
@@ -449,26 +582,25 @@ export default function AdminCompaniesPage() {
                         </div>
                       </td>
                       <td>
-                        <div className="flex flex-wrap gap-1.5 max-w-xs">
+                        <div className="flex flex-wrap gap-1.5 max-w-sm">
                           {cats.length === 0 ? (
-                            <span className="text-[10px] text-slate-500 font-medium">
+                            <span className="text-[10px] text-slate-500 font-medium bg-slate-500/10 border border-slate-500/20 px-2 py-0.5 rounded">
                               Unmapped
                             </span>
                           ) : (
-                            cats.slice(0, 3).map((cc, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-white/[0.04] border border-white/[0.08] text-slate-300"
-                              >
-                                {cc.bank?.code || "BANK"}:{" "}
-                                <strong className="text-purple-400">{cc.category}</strong>
-                              </span>
-                            ))
-                          )}
-                          {cats.length > 3 && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-500">
-                              +{cats.length - 3} more
-                            </span>
+                            cats.map((cc, idx) => {
+                              const visual = getCategoryStatus(cc.category);
+                              return (
+                                <span
+                                  key={idx}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 ${visual.badgeClass}`}
+                                  title={`${cc.bank?.name || "Bank"}: ${cc.category} (${visual.label})`}
+                                >
+                                  <span>{cc.bank?.code || "BANK"}:</span>
+                                  <span className="underline decoration-dotted">{cc.category}</span>
+                                </span>
+                              );
+                            })
                           )}
                         </div>
                       </td>
@@ -650,63 +782,64 @@ export default function AdminCompaniesPage() {
                 </div>
 
                 {/* Categories List */}
-                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                   {companyBankCategories.filter((c) => !c.delete).length === 0 ? (
                     <p className="text-slate-500 py-6 text-center text-xs">
-                      No partner bank classifications attached yet.
+                      No partner bank classifications attached yet. Choose a bank above to add.
                     </p>
                   ) : (
                     companyBankCategories
                       .filter((c) => !c.delete)
-                      .map((cat, idx) => (
+                      .map((cat) => (
                         <div
                           key={cat.bankId}
-                          className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-3"
+                          className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
-                          <div>
+                          <div className="min-w-[120px]">
                             <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">
                               {cat.bankName}
                             </h4>
-                            <span className="text-[10px] font-mono text-blue-400">
+                            <span className="text-[10px] font-mono text-blue-400 font-bold">
                               {cat.bankCode}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={cat.category}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setCompanyBankCategories((prev) =>
-                                  prev.map((item) =>
-                                    item.bankId === cat.bankId
-                                      ? { ...item, category: val, isModified: true }
-                                      : item
-                                  )
-                                );
-                              }}
-                              className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold"
-                            >
-                              {CATEGORY_TIERS.map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
-                                </option>
-                              ))}
-                            </select>
+                          <div className="flex items-center gap-2 flex-1 justify-end">
+                            {/* Custom Category Input with Datalist Suggestions */}
+                            <div className="relative flex-1 max-w-[180px]">
+                              <input
+                                type="text"
+                                list="category-suggestions"
+                                value={cat.category}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCompanyBankCategories((prev) =>
+                                    prev.map((item) =>
+                                      item.bankId === cat.bankId
+                                        ? { ...item, category: val, isModified: true }
+                                        : item
+                                    )
+                                  );
+                                }}
+                                placeholder="Category (e.g. Preferred)"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500 border border-slate-200 dark:border-white/[0.08]"
+                              />
+                            </div>
 
+                            {/* Status Selector */}
                             <select
                               value={cat.status}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setCompanyBankCategories((prev) =>
-                                  prev.map((item) =>
-                                    item.bankId === cat.bankId
-                                      ? { ...item, status: val, isModified: true }
-                                      : item
-                                  )
+                                    prev.map((item) =>
+                                      item.bankId === cat.bankId
+                                        ? { ...item, status: val, isModified: true }
+                                        : item
+                                    )
                                 );
                               }}
-                              className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold"
+                              className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.08] text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08]"
                             >
                               {STATUS_OPTIONS.map((s) => (
                                 <option key={s} value={s}>
@@ -715,6 +848,7 @@ export default function AdminCompaniesPage() {
                               ))}
                             </select>
 
+                            {/* Remove Button */}
                             <button
                               type="button"
                               onClick={() => {
@@ -726,7 +860,8 @@ export default function AdminCompaniesPage() {
                                   )
                                 );
                               }}
-                              className="p-1 text-slate-400 hover:text-rose-400 cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                              title="Remove bank mapping"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -745,14 +880,14 @@ export default function AdminCompaniesPage() {
                   setShowAddModal(false);
                   setShowEditModal(false);
                 }}
-                className="btn-secondary h-10 px-4 text-xs font-bold"
+                className="btn-secondary h-10 px-4 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="btn-primary h-10 px-5 text-xs font-bold"
+                className="btn-primary h-10 px-5 text-xs font-bold cursor-pointer"
               >
                 {isSubmitting
                   ? "Saving Company..."
@@ -792,18 +927,15 @@ export default function AdminCompaniesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300">Category Tier</label>
-                <select
+                <label className="text-xs font-bold text-slate-300">Category (Custom or Standard)</label>
+                <input
+                  type="text"
+                  list="category-suggestions"
                   value={bulkCategory}
                   onChange={(e) => setBulkCategory(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
-                >
-                  {CATEGORY_TIERS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="e.g. Preferred, CAT A"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -826,7 +958,7 @@ export default function AdminCompaniesPage() {
               <button
                 type="button"
                 onClick={() => setShowBulkModal(false)}
-                className="btn-secondary h-10 px-4 text-xs font-bold"
+                className="btn-secondary h-10 px-4 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
@@ -834,7 +966,7 @@ export default function AdminCompaniesPage() {
                 type="button"
                 disabled={!bulkBankId || isSubmitting}
                 onClick={handleBulkAssign}
-                className="btn-primary h-10 px-5 text-xs font-bold"
+                className="btn-primary h-10 px-5 text-xs font-bold cursor-pointer"
               >
                 {isSubmitting ? "Assigning..." : "Apply Category to Selection"}
               </button>
@@ -843,76 +975,172 @@ export default function AdminCompaniesPage() {
         </Modal>
       )}
 
-      {/* ── Merge Companies Modal ─────────────────────────────── */}
+      {/* ── Multi-Company Merge Review Modal (Phase 1) ─────────── */}
       {showMergeModal && (
         <Modal
           open={showMergeModal}
           onClose={() => setShowMergeModal(false)}
-          title="Merge Duplicate Company Records"
-          description="Consolidate duplicate employers into a single canonical record and rebind bank categories."
+          title="Consolidate Duplicate Company Records (Merge Entities)"
+          description="Merge multiple duplicate employer entries into one canonical record. All bank listings, location data, and aliases will be preserved."
+          maxWidth="max-w-2xl"
         >
-          <div className="space-y-4">
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold flex items-start gap-2.5">
-              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-              <span>
-                All category bindings from the source company will be merged into the target company,
-                and the source company will be permanently purged.
-              </span>
+          <div className="space-y-5">
+            {/* Informative Safety Notice */}
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
+              <div>
+                <strong className="font-bold text-emerald-300 block mb-0.5">Zero Business Data Loss Guaranteed</strong>
+                <span>
+                  All bank categorizations, location fields, and variant names will be consolidated under the chosen canonical record. Source variants become search aliases automatically.
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300">
-                Source Company (Duplicate to be deleted) *
-              </label>
-              <select
-                value={mergeSourceId}
-                onChange={(e) => setMergeSourceId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
-              >
-                <option value="">Select Source Company</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.cin ? `(${c.cin})` : ""}
-                  </option>
-                ))}
-              </select>
+            {/* Candidate List & Canonical Master Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-300">
+                  Select Canonical Entity to Keep ({mergeCandidates.length} Entities Selected)
+                </label>
+                <span className="text-[11px] text-slate-500">Choose one master company identity</span>
+              </div>
+
+              {mergeCandidates.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-dashed border-slate-300 dark:border-white/[0.1] text-center space-y-2">
+                  <p className="text-xs text-slate-400 font-medium">
+                    No duplicate companies selected yet. Search and add variant companies below.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {mergeCandidates.map((comp) => {
+                    const isCanonical = canonicalTargetId === comp.id;
+                    const cats = comp.companyCategories || comp.bankCategories || [];
+
+                    return (
+                      <div
+                        key={comp.id}
+                        onClick={() => setCanonicalTargetId(comp.id)}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                          isCanonical
+                            ? "bg-purple-500/10 border-purple-500/50 shadow-sm"
+                            : "bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.2]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                              isCanonical
+                                ? "border-purple-500 bg-purple-500 text-white"
+                                : "border-slate-400 dark:border-white/30"
+                            }`}
+                          >
+                            {isCanonical && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
+                                {comp.name}
+                              </span>
+                              {isCanonical && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  MASTER RECORD
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                              <span>CIN: <strong className="text-slate-300">{comp.cin || "None"}</strong></span>
+                              <span>•</span>
+                              <span>{comp.city || "—"}, {comp.state || "—"}</span>
+                              <span>•</span>
+                              <span>{cats.length} Bank Mapping{cats.length === 1 ? "" : "s"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeCandidateFromMerge(comp.id);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Remove from merge list"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300">
-                Target Company (Canonical master record to keep) *
-              </label>
-              <select
-                value={mergeTargetId}
-                onChange={(e) => setMergeTargetId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-bold focus:outline-none"
-              >
-                <option value="">Select Target Company</option>
-                {companies
-                  .filter((c) => c.id !== mergeSourceId)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.cin ? `(${c.cin})` : ""}
-                    </option>
+            {/* Search & Add More Duplicate Companies to Merge */}
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+              <label className="text-xs font-bold text-slate-300">Add other variant records to this merge:</label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={extraMergeSearch}
+                  onChange={(e) => handleSearchExtraMerge(e.target.value)}
+                  placeholder="Type company name or CIN to find and add..."
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-medium placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+                {isSearchingExtra && (
+                  <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
+
+              {extraMergeResults.length > 0 && (
+                <div className="p-2 rounded-xl bg-slate-900 border border-white/[0.1] max-h-40 overflow-y-auto space-y-1 shadow-lg">
+                  {extraMergeResults.map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => addCandidateToMerge(r)}
+                      className="p-2 rounded-lg hover:bg-white/[0.08] cursor-pointer flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-white truncate">{r.name}</span>
+                      <span className="text-[10px] text-purple-400 font-bold shrink-0">+ Add to merge</span>
+                    </div>
                   ))}
-              </select>
+                </div>
+              )}
             </div>
+
+            {/* Merge Direction Summary */}
+            {mergeCandidates.length >= 2 && canonicalTargetId && (
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-300 space-y-1">
+                <strong className="font-bold block text-purple-200">Confirmation Summary:</strong>
+                <p>
+                  You are merging{" "}
+                  <strong>{mergeCandidates.length - 1} duplicate company records</strong> into{" "}
+                  <strong className="text-white">
+                    "{mergeCandidates.find((c) => c.id === canonicalTargetId)?.name}"
+                  </strong>.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => setShowMergeModal(false)}
-                className="btn-secondary h-10 px-4 text-xs font-bold"
+                className="btn-secondary h-10 px-4 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={!mergeSourceId || !mergeTargetId || isSubmitting}
-                onClick={handleMergeCompanies}
-                className="btn-primary h-10 px-5 text-xs font-bold"
+                disabled={mergeCandidates.length < 2 || !canonicalTargetId || isSubmitting}
+                onClick={handleExecuteMerge}
+                className="btn-primary h-10 px-5 text-xs font-bold cursor-pointer"
               >
-                {isSubmitting ? "Merging..." : "Execute Company Merge"}
+                {isSubmitting
+                  ? "Consolidating Entities..."
+                  : `Execute Merge (${mergeCandidates.length} into 1)`}
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { usePincodesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   MapPin,
   Search,
@@ -28,12 +29,13 @@ import type { Pincode } from "@/types";
 
 export default function AdminPincodesPage() {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search.trim(), 450);
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
 
   const { data: pincodesData, isLoading: loading, refetch: fetchPincodes } = usePincodesQuery(
     page,
-    search
+    debouncedSearch
   );
   const { data: banks = [] } = useBanksQuery();
 

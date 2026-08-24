@@ -11,6 +11,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -197,6 +198,7 @@ export interface Executive {
   name: string;
   email: string;
   role: string;
+  isActive?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

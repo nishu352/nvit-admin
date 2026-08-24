@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useCategoriesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Tag,
   Search,
@@ -45,12 +46,13 @@ interface CategoryMapping {
 
 export default function AdminCategoriesPage() {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search.trim(), 450);
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
 
   const { data: categoriesData, isLoading: loading, refetch: fetchMappings } = useCategoriesQuery(
     page,
-    search
+    debouncedSearch
   );
   const { data: banks = [] } = useBanksQuery();
 
