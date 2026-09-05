@@ -1,9 +1,28 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "/api/v1";
+const getApiBaseUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (!envUrl) {
+    if (
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ) {
+      return "http://localhost:5001/api/v1";
+    }
+    return "https://web-production-676ee.up.railway.app/api/v1";
+  }
+
+  const clean = envUrl.trim().replace(/\/+$/, "");
+  if (clean.endsWith("/api/v1")) {
+    return clean;
+  }
+  if (clean.endsWith("/api")) {
+    return `${clean}/v1`;
+  }
+  return `${clean}/api/v1`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
