@@ -107,7 +107,10 @@ export default function AdminFeedbackPage() {
         if (selectedTicket && selectedTicket.id === id) {
           setSelectedTicket(res.data.data);
         }
-        showToast({ title: `Ticket #${selectedTicket?.ticketNumber || id} updated`, type: "success" });
+        showToast({
+          title: `Ticket #${selectedTicket?.ticketNumber || id} updated & email notification queued for ${selectedTicket?.email || 'customer'}`,
+          type: "success",
+        });
         fetchTickets();
       }
     } catch (err: unknown) {
@@ -402,6 +405,13 @@ export default function AdminFeedbackPage() {
                   >
                     <span>Save Internal Notes</span>
                   </button>
+
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400 dark:text-blue-300 flex items-start gap-2">
+                    <Mail className="w-3.5 h-3.5 shrink-0 text-blue-400 mt-0.5" />
+                    <span className="leading-snug">
+                      Customer will receive an automated status update email at <strong>{selectedTicket.email}</strong> from <strong>{selectedTicket.type === "INQUIRY" || selectedTicket.type === "ENQUIRY" ? "info@nvit.space" : "support@nvit.space"}</strong>.
+                    </span>
+                  </div>
                 </div>
               </div>
 
