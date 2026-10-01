@@ -669,8 +669,8 @@ export default function AdminFeedbackPage() {
 
                             {/* Simulated Executive Signature */}
                             <div className="pt-3 border-t border-slate-100 dark:border-white/[0.06] text-[11px] text-slate-400 space-y-0.5">
-                              <div className="font-bold text-slate-900 dark:text-white">Nishant Bhardwaj</div>
-                              <div>Lead Director &bull; NVIT.SPACE Client Studio</div>
+                              <div className="font-bold text-slate-900 dark:text-white">Engineering Support Desk</div>
+                              <div>NVIT.SPACE Client Operations</div>
                               <div className="text-[10px] text-blue-400">www.nvit.space &bull; {selectedTicket.type === "INQUIRY" || selectedTicket.type === "ENQUIRY" ? "info@nvit.space" : "support@nvit.space"}</div>
                             </div>
                           </div>

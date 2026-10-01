@@ -447,7 +447,7 @@ export default function AdminExecutivesPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Rahul Sharma"
+                placeholder="Enter full name"
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -537,7 +537,7 @@ export default function AdminExecutivesPage() {
                 required
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="e.g. Rahul Sharma"
+                placeholder="Enter full name"
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs font-semibold rounded-xl focus:outline-none focus:border-indigo-500"
               />
             </div>

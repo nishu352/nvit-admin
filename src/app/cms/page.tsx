@@ -56,13 +56,13 @@ export default function AdminCMSPage() {
   const [companyWebsite, setCompanyWebsite] = useState("");
 
   // ── Founders ──────────────────────────────────────────────
-  const [founderName, setFounderName] = useState("Nishant Bhardwaj");
-  const [founderTitle, setFounderTitle] = useState("Founder & CEO");
+  const [founderName, setFounderName] = useState("");
+  const [founderTitle, setFounderTitle] = useState("");
   const [founderBio, setFounderBio] = useState("");
   const [founderLinkedin, setFounderLinkedin] = useState("");
 
-  const [coFounderName, setCoFounderName] = useState("Vineet");
-  const [coFounderTitle, setCoFounderTitle] = useState("Co-Founder & CTO");
+  const [coFounderName, setCoFounderName] = useState("");
+  const [coFounderTitle, setCoFounderTitle] = useState("");
   const [coFounderBio, setCoFounderBio] = useState("");
   const [coFounderLinkedin, setCoFounderLinkedin] = useState("");
 
@@ -100,15 +100,24 @@ export default function AdminCMSPage() {
           setCompanyWebsite(data.company.website || "");
         }
         if (data.founders) {
-          setFounderName(data.founders.founder?.name || "Nishant Bhardwaj");
-          setFounderTitle(data.founders.founder?.title || "Founder & CEO");
+          setFounderName(data.founders.founder?.name || "");
+          setFounderTitle(data.founders.founder?.title || "");
           setFounderBio(data.founders.founder?.bio || "");
           setFounderLinkedin(data.founders.founder?.linkedin || "");
 
-          setCoFounderName(data.founders.coFounder?.name || "Vineet");
-          setCoFounderTitle(data.founders.coFounder?.title || "Co-Founder & CTO");
+          setCoFounderName(data.founders.coFounder?.name || "");
+          setCoFounderTitle(data.founders.coFounder?.title || "");
           setCoFounderBio(data.founders.coFounder?.bio || "");
           setCoFounderLinkedin(data.founders.coFounder?.linkedin || "");
+        } else {
+          setFounderName("");
+          setFounderTitle("");
+          setFounderBio("");
+          setFounderLinkedin("");
+          setCoFounderName("");
+          setCoFounderTitle("");
+          setCoFounderBio("");
+          setCoFounderLinkedin("");
         }
         if (data.status) setCmsStatus(data.status);
       }
@@ -336,7 +345,7 @@ export default function AdminCMSPage() {
                     type="text"
                     value={supportPhone}
                     onChange={(e) => setSupportPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
+                    placeholder="e.g. +91 (Optional Helpline)"
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -497,7 +506,7 @@ export default function AdminCMSPage() {
                       type="text"
                       value={founderName}
                       onChange={(e) => setFounderName(e.target.value)}
-                      placeholder="Nishant Bhardwaj"
+                      placeholder="e.g. Founder Name (Optional)"
                       className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
@@ -508,7 +517,7 @@ export default function AdminCMSPage() {
                       type="text"
                       value={founderTitle}
                       onChange={(e) => setFounderTitle(e.target.value)}
-                      placeholder="Founder & CEO"
+                      placeholder="e.g. Founder & CEO (Optional)"
                       className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
@@ -520,7 +529,7 @@ export default function AdminCMSPage() {
                     rows={2}
                     value={founderBio}
                     onChange={(e) => setFounderBio(e.target.value)}
-                    placeholder="Leadership background and fintech experience..."
+                    placeholder="Leadership background and engineering experience (Optional)..."
                     className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
                   />
                 </div>
@@ -531,7 +540,7 @@ export default function AdminCMSPage() {
                     type="url"
                     value={founderLinkedin}
                     onChange={(e) => setFounderLinkedin(e.target.value)}
-                    placeholder="https://linkedin.com/in/nishant"
+                    placeholder="https://linkedin.com/in/username (Optional)"
                     className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
@@ -550,7 +559,7 @@ export default function AdminCMSPage() {
                       type="text"
                       value={coFounderName}
                       onChange={(e) => setCoFounderName(e.target.value)}
-                      placeholder="Vineet"
+                      placeholder="e.g. Co-Founder Name (Optional)"
                       className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
@@ -561,7 +570,7 @@ export default function AdminCMSPage() {
                       type="text"
                       value={coFounderTitle}
                       onChange={(e) => setCoFounderTitle(e.target.value)}
-                      placeholder="Co-Founder & CTO"
+                      placeholder="e.g. Co-Founder & CTO (Optional)"
                       className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                     />
                   </div>
@@ -573,7 +582,7 @@ export default function AdminCMSPage() {
                     rows={2}
                     value={coFounderBio}
                     onChange={(e) => setCoFounderBio(e.target.value)}
-                    placeholder="Engineering and platform architecture experience..."
+                    placeholder="Engineering and platform architecture experience (Optional)..."
                     className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-medium focus:outline-none resize-none"
                   />
                 </div>
@@ -584,7 +593,7 @@ export default function AdminCMSPage() {
                     type="url"
                     value={coFounderLinkedin}
                     onChange={(e) => setCoFounderLinkedin(e.target.value)}
-                    placeholder="https://linkedin.com/in/vineet"
+                    placeholder="https://linkedin.com/in/username (Optional)"
                     className="w-full px-4 py-3 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs font-semibold focus:outline-none"
                   />
                 </div>
