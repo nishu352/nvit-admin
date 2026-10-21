@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useCompaniesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
@@ -59,12 +60,25 @@ const SUGGESTED_CATEGORIES = [
   "Unlisted",
 ];
 
-export default function AdminCompaniesPage() {
-  const [search, setSearch] = useState("");
+function AdminCompaniesContent() {
+  const searchParams = useSearchParams();
+  const paramId = searchParams.get("id");
+  const paramSearch = searchParams.get("search");
+
+  const [search, setSearch] = useState(paramSearch || "");
   const debouncedSearch = useDebounce(search.trim(), 450);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { showToast } = useToast();
+
+  const handledCompanyIdRef = useRef<string | null>(null);
+
+  // Sync search input if URL search parameter changes
+  useEffect(() => {
+    if (paramSearch !== null && paramSearch !== search) {
+      setSearch(paramSearch);
+    }
+  }, [paramSearch]);
 
   const { data: companiesData, isLoading: loading, isFetching, refetch: fetchCompanies } = useCompaniesQuery(
     page,
@@ -173,6 +187,41 @@ export default function AdminCompaniesPage() {
 
     setShowEditModal(true);
   };
+
+  // Auto-open record modal when navigated with ?id=
+  useEffect(() => {
+    if (!paramId || handledCompanyIdRef.current === paramId) return;
+
+    let isMounted = true;
+    const loadCompanyRecord = async () => {
+      try {
+        const res = await apiClient.get(`/admin/companies/${paramId}`);
+        if (isMounted && res.data?.success && res.data.data) {
+          handledCompanyIdRef.current = paramId;
+          openEditModal(res.data.data);
+        } else if (isMounted) {
+          handledCompanyIdRef.current = paramId;
+          showToast({
+            title: "Selected company record could not be found or has been removed.",
+            type: "error",
+          });
+        }
+      } catch (err) {
+        if (isMounted) {
+          handledCompanyIdRef.current = paramId;
+          showToast({
+            title: "Failed to load the selected company record.",
+            type: "error",
+          });
+        }
+      }
+    };
+
+    loadCompanyRecord();
+    return () => {
+      isMounted = false;
+    };
+  }, [paramId]);
 
   // Save / Update Company
   const handleSaveCompany = async (e: React.FormEvent) => {
@@ -1118,7 +1167,7 @@ export default function AdminCompaniesPage() {
                   You are merging{" "}
                   <strong>{mergeCandidates.length - 1} duplicate company records</strong> into{" "}
                   <strong className="text-white">
-                    "{mergeCandidates.find((c) => c.id === canonicalTargetId)?.name}"
+                    &ldquo;{mergeCandidates.find((c) => c.id === canonicalTargetId)?.name}&rdquo;
                   </strong>.
                 </p>
               </div>
@@ -1160,5 +1209,13 @@ export default function AdminCompaniesPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminCompaniesPage() {
+  return (
+    <Suspense fallback={<AdminTableSkeleton rows={8} columns={5} />}>
+      <AdminCompaniesContent />
+    </Suspense>
   );
 }

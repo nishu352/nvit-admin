@@ -48,7 +48,9 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
     companies: Company[];
     pincodes: Pincode[];
     leads: Lead[];
-  }>({ banks: [], companies: [], pincodes: [], leads: [] });
+    feedback: any[];
+    users: any[];
+  }>({ banks: [], companies: [], pincodes: [], leads: [], feedback: [], users: [] });
   const [searching, setSearching] = useState(false);
 
   // Breadcrumbs calculation
@@ -77,7 +79,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
     const trimmed = query.trim();
     if (!trimmed) {
       const timer = setTimeout(() => {
-        setSearchResults({ banks: [], companies: [], pincodes: [], leads: [] });
+        setSearchResults({ banks: [], companies: [], pincodes: [], leads: [], feedback: [], users: [] });
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -85,24 +87,41 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const [banksRes, cosRes, pinsRes, leadsRes] = await Promise.all([
+        const [banksRes, cosRes, pinsRes, leadsRes, feedbackRes, usersRes] = await Promise.allSettled([
           apiClient.get(`/admin/banks`),
           apiClient.get(`/admin/companies?limit=5&query=${encodeURIComponent(trimmed)}`),
           apiClient.get(`/admin/pincodes?limit=5&query=${encodeURIComponent(trimmed)}`),
           apiClient.get(`/crm/leads?query=${encodeURIComponent(trimmed)}`),
+          apiClient.get(`/admin/feedback?search=${encodeURIComponent(trimmed)}&limit=4`),
+          apiClient.get(`/admin/users`),
         ]);
 
-        const filteredBanks = ((banksRes.data.data || []) as Bank[]).filter(
+        const banksData = banksRes.status === "fulfilled" ? (banksRes.value.data?.data || []) : [];
+        const cosData = cosRes.status === "fulfilled" ? (cosRes.value.data?.data?.items || []) : [];
+        const pinsData = pinsRes.status === "fulfilled" ? (pinsRes.value.data?.data?.items || []) : [];
+        const leadsData = leadsRes.status === "fulfilled" ? (leadsRes.value.data?.data || []) : [];
+        const feedbackData = feedbackRes.status === "fulfilled" ? (feedbackRes.value.data?.data || []) : [];
+        const usersData = usersRes.status === "fulfilled" ? (usersRes.value.data?.data || []) : [];
+
+        const filteredBanks = (banksData as Bank[]).filter(
           (b) =>
             b.name.toLowerCase().includes(trimmed.toLowerCase()) ||
             b.code.toLowerCase().includes(trimmed.toLowerCase())
         );
 
+        const filteredUsers = (usersData as any[]).filter(
+          (u) =>
+            (u.name && u.name.toLowerCase().includes(trimmed.toLowerCase())) ||
+            (u.email && u.email.toLowerCase().includes(trimmed.toLowerCase()))
+        );
+
         setSearchResults({
           banks: filteredBanks.slice(0, 4),
-          companies: (cosRes.data.data?.items || []) as Company[],
-          pincodes: (pinsRes.data.data?.items || []) as Pincode[],
-          leads: ((leadsRes.data.data || []) as Lead[]).slice(0, 4),
+          companies: (cosData as Company[]).slice(0, 5),
+          pincodes: (pinsData as Pincode[]).slice(0, 4),
+          leads: (leadsData as Lead[]).slice(0, 4),
+          feedback: (feedbackData as any[]).slice(0, 4),
+          users: filteredUsers.slice(0, 4),
         });
       } catch (searchErr) {
         console.error(searchErr);
@@ -130,9 +149,9 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200 dark:border-white/[0.08] px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between shrink-0 gap-3">
+      <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200 dark:border-white/[0.08] px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between shrink-0 gap-2 sm:gap-3">
         {/* Left: Hamburger & Breadcrumbs */}
-        <div className="flex items-center space-x-3 flex-1 min-w-0">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 sm:flex-1 min-w-0">
           {onMenuToggle && (
             <button
               onClick={onMenuToggle}
@@ -164,17 +183,21 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
         </div>
 
         {/* Center/Search trigger */}
-        <div className="flex-1 max-w-sm">
+        <div className="flex-1 max-w-xs sm:max-w-sm">
           <button
             type="button"
             onClick={() => setShowSearchModal(true)}
-            className="w-full flex items-center justify-between px-3.5 py-2 bg-slate-100/80 dark:bg-white/[0.04] hover:bg-slate-200/70 dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs text-slate-400 dark:text-slate-400 cursor-pointer transition-all"
+            className="w-full flex items-center justify-between px-2.5 sm:px-3.5 py-2 bg-slate-100/80 dark:bg-white/[0.04] hover:bg-slate-200/70 dark:hover:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs text-slate-400 dark:text-slate-400 cursor-pointer transition-all min-h-[38px]"
+            aria-label="Open search command palette"
           >
-            <div className="flex items-center gap-2">
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-medium">Quick search...</span>
+            <div className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="font-medium truncate">
+                <span className="hidden sm:inline">Quick search...</span>
+                <span className="sm:hidden">Search...</span>
+              </span>
             </div>
-            <div className="flex items-center space-x-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] px-1.5 py-0.5 rounded-md">
+            <div className="hidden sm:flex items-center space-x-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08] px-1.5 py-0.5 rounded-md shrink-0">
               <span>⌘</span>
               <span>K</span>
             </div>
@@ -182,7 +205,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+        <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
           {/* Live Gateway Status Pill */}
           <div className="hidden lg:flex items-center space-x-2 bg-slate-100/70 dark:bg-white/[0.04] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/[0.08] text-xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">API:</span>
@@ -231,7 +254,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#091024] border border-slate-200 dark:border-white/[0.08] rounded-2xl p-4 shadow-2xl space-y-3 z-50 animate-slow-fade">
+              <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-white dark:bg-[#091024] border border-slate-200 dark:border-white/[0.08] rounded-2xl p-4 shadow-2xl space-y-3 z-50 animate-slow-fade">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/[0.08]">
                   <span className="text-xs font-bold text-slate-900 dark:text-white">
                     Compliance Activity
@@ -266,7 +289,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
 
           {/* User Profile Mini */}
           <div className="flex items-center space-x-2.5 sm:border-l sm:border-slate-200 sm:dark:border-white/[0.08] sm:pl-3 h-8">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/20">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/20 shrink-0">
               {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
             </div>
             <div className="hidden xl:block text-left truncate max-w-28">
@@ -284,29 +307,30 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
       {/* Cmd + K Command Palette Modal */}
       <AnimatePresence>
         {showSearchModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-start justify-center pt-16 sm:pt-24 p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-start justify-center p-2.5 sm:p-4 pt-4 sm:pt-20">
             <motion.div
               initial={{ scale: 0.96, opacity: 0, y: -10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.96, opacity: 0, y: -10 }}
               transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="bg-white dark:bg-[#091024] rounded-3xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-white/[0.1] space-y-4 text-slate-900 dark:text-slate-100"
+              className="bg-white dark:bg-[#091024] rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-white/[0.1] flex flex-col max-h-[92vh] text-slate-900 dark:text-slate-100"
             >
               {/* Search Input */}
-              <div className="relative flex items-center border-b border-slate-200 dark:border-white/[0.08] pb-4">
+              <div className="relative flex items-center border-b border-slate-200 dark:border-white/[0.08] pb-3 sm:pb-4 shrink-0">
                 <Search className="w-5 h-5 text-blue-500 absolute left-2" />
                 <input
                   type="text"
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search lenders, companies, pincodes, leads..."
-                  className="w-full bg-transparent pl-10 pr-10 text-slate-900 dark:text-white text-sm font-semibold placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
+                  placeholder="Search lenders, companies, pincodes, leads, feedback..."
+                  className="w-full bg-transparent pl-10 pr-10 text-slate-900 dark:text-white text-xs sm:text-sm font-semibold placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
                 />
                 {query ? (
                   <button
                     onClick={() => setQuery("")}
-                    className="absolute right-2 text-slate-400 hover:text-white cursor-pointer"
+                    className="absolute right-2 p-1 text-slate-400 hover:text-white cursor-pointer"
+                    aria-label="Clear search input"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -314,6 +338,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                   <button
                     onClick={() => setShowSearchModal(false)}
                     className="absolute right-2 text-[10px] text-slate-500 border border-slate-300 dark:border-white/[0.1] rounded-md px-2 py-0.5 hover:text-white cursor-pointer"
+                    aria-label="Close search modal"
                   >
                     ESC
                   </button>
@@ -321,7 +346,7 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
               </div>
 
               {/* Search Results Display */}
-              <div className="max-h-96 overflow-y-auto space-y-4 pr-1 text-xs">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs max-h-[62vh] sm:max-h-96 my-2">
                 {searching ? (
                   <div className="py-12 text-center text-slate-400 font-semibold flex items-center justify-center gap-2">
                     <Activity className="w-4 h-4 text-blue-500 animate-spin" />
@@ -331,7 +356,9 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                   !searchResults.banks.length &&
                   !searchResults.companies.length &&
                   !searchResults.pincodes.length &&
-                  !searchResults.leads.length ? (
+                  !searchResults.leads.length &&
+                  !searchResults.feedback.length &&
+                  !searchResults.users.length ? (
                   <div className="py-12 text-center text-slate-500 font-semibold">
                     No matching records found across system
                   </div>
@@ -346,19 +373,21 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                         {searchResults.banks.map((b) => (
                           <div
                             key={b.id}
-                            onClick={() => navigateTo("/banks")}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
+                            onClick={() =>
+                              navigateTo(`/banks?id=${encodeURIComponent(b.id)}&search=${encodeURIComponent(b.name)}`)
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
                           >
-                            <div className="flex items-center space-x-3">
-                              <Building2 className="w-4 h-4 text-blue-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <Building2 className="w-4 h-4 text-blue-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
                                 {b.name}
                               </span>
-                              <span className="text-[10px] text-slate-500 font-mono">
+                              <span className="text-[10px] text-slate-500 font-mono shrink-0">
                                 ({b.code})
                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                            <span className="text-[10px] text-slate-400 uppercase font-semibold shrink-0">
                               {b.type}
                             </span>
                           </div>
@@ -375,16 +404,20 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                         {searchResults.companies.map((c) => (
                           <div
                             key={c.id}
-                            onClick={() => navigateTo("/companies")}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
+                            onClick={() =>
+                              navigateTo(
+                                `/companies?id=${encodeURIComponent(c.id)}&search=${encodeURIComponent(c.name)}`
+                              )
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
                           >
-                            <div className="flex items-center space-x-3">
-                              <Building className="w-4 h-4 text-emerald-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <Building className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
                                 {c.name}
                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 font-mono">
+                            <span className="text-[10px] text-slate-500 font-mono shrink-0">
                               {c.cin || "NO CIN"}
                             </span>
                           </div>
@@ -401,19 +434,23 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                         {searchResults.pincodes.map((p) => (
                           <div
                             key={p.id}
-                            onClick={() => navigateTo("/pincodes")}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
+                            onClick={() =>
+                              navigateTo(
+                                `/pincodes?id=${encodeURIComponent(p.id)}&search=${encodeURIComponent(p.pincode)}`
+                              )
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
                           >
-                            <div className="flex items-center space-x-3">
-                              <MapPin className="w-4 h-4 text-amber-400" />
-                              <span className="font-bold text-slate-900 dark:text-white font-mono">
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white font-mono shrink-0">
                                 {p.pincode}
                               </span>
-                              <span className="text-slate-400 font-medium">
+                              <span className="text-slate-400 font-medium truncate">
                                 {p.city}, {p.state}
                               </span>
                             </div>
-                            <span className="text-[10px] text-emerald-400 font-bold">
+                            <span className="text-[10px] text-emerald-400 font-bold shrink-0">
                               {p.isServiceable ? "Serviceable" : "Unserviceable"}
                             </span>
                           </div>
@@ -430,20 +467,94 @@ export default function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
                         {searchResults.leads.map((l) => (
                           <div
                             key={l.id}
-                            onClick={() => navigateTo("/crm/leads")}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors"
+                            onClick={() =>
+                              navigateTo(
+                                `/crm/leads?id=${encodeURIComponent(l.id)}&search=${encodeURIComponent(l.name)}`
+                              )
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
                           >
-                            <div className="flex items-center space-x-3">
-                              <Users className="w-4 h-4 text-purple-400" />
-                              <span className="font-bold text-slate-900 dark:text-white">
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
                                 {l.name}
                               </span>
-                              <span className="text-slate-500 text-[10px] font-mono">
+                              <span className="text-slate-500 text-[10px] font-mono shrink-0">
                                 ({l.mobile})
                               </span>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold uppercase">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold uppercase shrink-0">
                               {l.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Support Feedback Section */}
+                    {searchResults.feedback.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Support &amp; Feedback Tickets
+                        </span>
+                        {searchResults.feedback.map((f) => (
+                          <div
+                            key={f.id}
+                            onClick={() =>
+                              navigateTo(
+                                `/feedback?id=${encodeURIComponent(f.id)}&search=${encodeURIComponent(
+                                  f.ticketNumber || f.subject
+                                )}`
+                              )
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
+                          >
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <Compass className="w-4 h-4 text-cyan-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
+                                {f.subject || f.ticketNumber}
+                              </span>
+                              <span className="text-slate-500 text-[10px] shrink-0">
+                                ({f.name})
+                              </span>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold uppercase shrink-0">
+                              {f.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Staff & Users Section */}
+                    {searchResults.users.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Staff Accounts &amp; Executives
+                        </span>
+                        {searchResults.users.map((u) => (
+                          <div
+                            key={u.id}
+                            onClick={() =>
+                              navigateTo(
+                                `/executives?id=${encodeURIComponent(u.id)}&search=${encodeURIComponent(
+                                  u.name || u.email
+                                )}`
+                              )
+                            }
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] hover:bg-blue-50 dark:hover:bg-blue-600/10 border border-slate-200 dark:border-white/[0.06] hover:border-blue-500/30 cursor-pointer transition-colors gap-2 min-h-[44px]"
+                          >
+                            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                              <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white truncate">
+                                {u.name}
+                              </span>
+                              <span className="text-slate-500 text-[10px] truncate shrink-0">
+                                ({u.email})
+                              </span>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase shrink-0">
+                              {u.role?.replace("_", " ")}
                             </span>
                           </div>
                         ))}

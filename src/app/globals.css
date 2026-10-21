@@ -201,18 +201,22 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ENTERPRISE DATA TABLES
+   ENTERPRISE DATA TABLES (RESPONSIVE)
    ═══════════════════════════════════════════════════════════════ */
 .admin-table-container {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 1.125rem;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-card);
+  max-width: 100%;
 }
 
 .admin-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -226,6 +230,7 @@ body {
   color: var(--text-muted);
   padding: 0.875rem 1.25rem;
   border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
 }
 
 .dark .admin-table th {
@@ -259,6 +264,17 @@ body {
 
 .dark .admin-table tbody tr:hover {
   background-color: rgba(37, 99, 235, 0.08);
+}
+
+@media (max-width: 640px) {
+  .admin-table th {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.625rem;
+  }
+  .admin-table td {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.75rem;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

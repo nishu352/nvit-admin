@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useBanksQuery } from "@/hooks/useAdminQueries";
@@ -36,12 +37,24 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import type { Bank } from "@/types";
 
-export default function AdminBanksPage() {
+function AdminBanksContent() {
+  const searchParams = useSearchParams();
+  const paramId = searchParams.get("id");
+  const paramSearch = searchParams.get("search");
+
   const { data: banks = [], isLoading: loading, refetch: fetchBanks } = useBanksQuery();
   const { showToast } = useToast();
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(paramSearch || "");
   const [typeFilter, setTypeFilter] = useState<"ALL" | "BANK" | "NBFC">("ALL");
+  const handledBankIdRef = useRef<string | null>(null);
+
+  // Sync search filter if URL param changes
+  useEffect(() => {
+    if (paramSearch !== null && paramSearch !== searchQuery) {
+      setSearchQuery(paramSearch);
+    }
+  }, [paramSearch]);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -113,6 +126,27 @@ export default function AdminBanksPage() {
     setProcessingFee(bank.processingFee || 1.0);
     setShowModal(true);
   };
+
+  // Auto-load and open selected bank when navigated with ?id=
+  useEffect(() => {
+    if (!paramId || handledBankIdRef.current === paramId) return;
+
+    if (!loading && banks.length > 0) {
+      const target = banks.find(
+        (b) => b.id === paramId || b.code.toLowerCase() === paramId.toLowerCase()
+      );
+      if (target) {
+        handledBankIdRef.current = paramId;
+        openEditModal(target);
+      } else {
+        handledBankIdRef.current = paramId;
+        showToast({
+          title: "The selected bank or NBFC could not be found.",
+          type: "error",
+        });
+      }
+    }
+  }, [paramId, banks, loading]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -695,5 +729,13 @@ export default function AdminBanksPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminBanksPage() {
+  return (
+    <Suspense fallback={<AdminCardGridSkeleton count={6} />}>
+      <AdminBanksContent />
+    </Suspense>
   );
 }

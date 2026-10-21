@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiClient } from "@/services/apiClient";
 import {
   MessageSquareText,
@@ -52,18 +53,29 @@ interface FeedbackTicket {
   updatedAt: string;
 }
 
-export default function AdminFeedbackPage() {
+function AdminFeedbackContent() {
+  const searchParams = useSearchParams();
+  const paramId = searchParams.get("id");
+  const paramSearch = searchParams.get("search");
+
   const [tickets, setTickets] = useState<FeedbackTicket[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState("ALL");
   const [activeStatus, setActiveStatus] = useState("ALL");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(paramSearch || "");
   const [selectedTicket, setSelectedTicket] = useState<FeedbackTicket | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
   const [updating, setUpdating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FeedbackTicket | null>(null);
   const { showToast } = useToast();
+  const handledTicketIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (paramSearch !== null && paramSearch !== searchQuery) {
+      setSearchQuery(paramSearch);
+    }
+  }, [paramSearch]);
 
   // ── Gemini AI Email Studio State ──────────────────────────────────────────
   const [activeDrawerTab, setActiveDrawerTab] = useState<"AI_REPLY" | "INTERNAL_NOTES">("AI_REPLY");
@@ -122,6 +134,35 @@ export default function AdminFeedbackPage() {
   useEffect(() => {
     fetchTickets();
   }, [activeType, activeStatus]);
+
+  useEffect(() => {
+    if (!paramId || handledTicketIdRef.current === paramId) return;
+
+    const existing = tickets.find((t) => t.id === paramId || t.ticketNumber === paramId);
+    if (existing) {
+      handledTicketIdRef.current = paramId;
+      setSelectedTicket(existing);
+      return;
+    }
+
+    if (!loading) {
+      let isMounted = true;
+      apiClient
+        .get(`/admin/feedback/${paramId}`)
+        .then((res) => {
+          if (isMounted && res.data?.success && res.data.data) {
+            handledTicketIdRef.current = paramId;
+            setSelectedTicket(res.data.data);
+          }
+        })
+        .catch(() => {
+          handledTicketIdRef.current = paramId;
+        });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [paramId, tickets, loading]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,7 +447,7 @@ export default function AdminFeedbackPage() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 350, damping: 35 }}
-              className="relative z-10 w-full max-w-2xl bg-white dark:bg-[#060c1c] border-l border-slate-200 dark:border-white/[0.08] h-full shadow-2xl flex flex-col p-6 space-y-5"
+              className="relative z-10 w-full max-w-full sm:max-w-2xl bg-white dark:bg-[#060c1c] border-l border-slate-200 dark:border-white/[0.08] h-full shadow-2xl flex flex-col p-4 sm:p-6 space-y-4 sm:space-y-5"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.08] pb-4">
@@ -812,5 +853,13 @@ export default function AdminFeedbackPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminFeedbackPage() {
+  return (
+    <Suspense fallback={<AdminCardGridSkeleton count={6} />}>
+      <AdminFeedbackContent />
+    </Suspense>
   );
 }

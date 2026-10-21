@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { useCrmLeadsQuery } from "@/hooks/useAdminQueries";
@@ -42,20 +43,71 @@ const CRM_STAGES = [
   { id: "LOST", title: "Lost", badgeClass: "badge-rose" },
 ];
 
-export default function AdminCRMLeadsPage() {
-  const [search, setSearch] = useState("");
+function AdminCRMLeadsContent() {
+  const searchParams = useSearchParams();
+  const paramId = searchParams.get("id");
+  const paramSearch = searchParams.get("search");
+
+  const [search, setSearch] = useState(paramSearch || "");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [newNote, setNewNote] = useState("");
   const [statusUpdateRemark, setStatusUpdateRemark] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const { showToast } = useToast();
+  const handledLeadIdRef = useRef<string | null>(null);
+
+  // Sync search input if URL search parameter changes
+  useEffect(() => {
+    if (paramSearch !== null && paramSearch !== search) {
+      setSearch(paramSearch);
+    }
+  }, [paramSearch]);
 
   const { data: leadsData = [], isLoading: loading, refetch: fetchLeads } = useCrmLeadsQuery(
     search || undefined
   );
 
   const leads = leadsData as Lead[];
+
+  // Auto-select and load lead record when navigated with ?id=
+  useEffect(() => {
+    if (!paramId || handledLeadIdRef.current === paramId) return;
+
+    const target = leads.find((l) => l.id === paramId);
+    if (target) {
+      handledLeadIdRef.current = paramId;
+      setSelectedLead(target);
+      return;
+    }
+
+    if (!loading) {
+      let isMounted = true;
+      apiClient
+        .get(`/crm/leads?query=${encodeURIComponent(paramSearch || paramId)}`)
+        .then((res) => {
+          if (!isMounted) return;
+          const found = ((res.data?.data || []) as Lead[]).find((l) => l.id === paramId);
+          if (found) {
+            handledLeadIdRef.current = paramId;
+            setSelectedLead(found);
+          } else {
+            handledLeadIdRef.current = paramId;
+            showToast({
+              title: "The selected CRM lead inquiry could not be found.",
+              type: "error",
+            });
+          }
+        })
+        .catch(() => {
+          if (isMounted) handledLeadIdRef.current = paramId;
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [paramId, paramSearch, leads, loading]);
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     setIsUpdatingStatus(true);
@@ -234,7 +286,7 @@ export default function AdminCRMLeadsPage() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 350, damping: 35 }}
-              className="relative z-10 w-full max-w-lg bg-white dark:bg-[#060c1c] border-l border-slate-200 dark:border-white/[0.08] h-full shadow-2xl flex flex-col p-6 space-y-5"
+              className="relative z-10 w-full max-w-full sm:max-w-lg bg-white dark:bg-[#060c1c] border-l border-slate-200 dark:border-white/[0.08] h-full shadow-2xl flex flex-col p-4 sm:p-6 space-y-4 sm:space-y-5"
             >
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.08] pb-4">
                 <div className="space-y-0.5">
@@ -382,5 +434,19 @@ export default function AdminCRMLeadsPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function AdminCRMLeadsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-slate-400 font-semibold flex items-center justify-center gap-2">
+          <span>Loading CRM pipeline...</span>
+        </div>
+      }
+    >
+      <AdminCRMLeadsContent />
+    </Suspense>
   );
 }

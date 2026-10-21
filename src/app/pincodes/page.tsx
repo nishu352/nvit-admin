@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { apiClient } from "@/services/apiClient";
 import { usePincodesQuery, useBanksQuery } from "@/hooks/useAdminQueries";
@@ -27,11 +28,23 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import type { Pincode } from "@/types";
 
-export default function AdminPincodesPage() {
-  const [search, setSearch] = useState("");
+function AdminPincodesContent() {
+  const searchParams = useSearchParams();
+  const paramId = searchParams.get("id");
+  const paramSearch = searchParams.get("search");
+
+  const [search, setSearch] = useState(paramSearch || "");
   const debouncedSearch = useDebounce(search.trim(), 450);
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
+  const handledPincodeIdRef = useRef<string | null>(null);
+
+  // Sync search input if URL search parameter changes
+  useEffect(() => {
+    if (paramSearch !== null && paramSearch !== search) {
+      setSearch(paramSearch);
+    }
+  }, [paramSearch]);
 
   const { data: pincodesData, isLoading: loading, refetch: fetchPincodes } = usePincodesQuery(
     page,
@@ -135,6 +148,47 @@ export default function AdminPincodesPage() {
     setCategory(p.category || "PREFERRED");
     setShowModal(true);
   };
+
+  // Auto-open record modal when navigated with ?id=
+  useEffect(() => {
+    if (!paramId || handledPincodeIdRef.current === paramId) return;
+
+    const target = pincodes.find((p) => p.id === paramId || p.pincode === paramId);
+    if (target) {
+      handledPincodeIdRef.current = paramId;
+      openEditModal(target);
+      return;
+    }
+
+    if (!loading && pincodesData) {
+      let isMounted = true;
+      apiClient
+        .get(`/admin/pincodes?query=${encodeURIComponent(paramSearch || paramId)}`)
+        .then((res) => {
+          if (!isMounted) return;
+          const found = (res.data?.data?.items || []).find(
+            (p: Pincode) => p.id === paramId || p.pincode === paramId
+          );
+          if (found) {
+            handledPincodeIdRef.current = paramId;
+            openEditModal(found);
+          } else {
+            handledPincodeIdRef.current = paramId;
+            showToast({
+              title: "The selected postal code record could not be found.",
+              type: "error",
+            });
+          }
+        })
+        .catch(() => {
+          if (isMounted) handledPincodeIdRef.current = paramId;
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [paramId, paramSearch, pincodes, loading, pincodesData]);
 
   return (
     <div className="space-y-7">
@@ -460,5 +514,13 @@ export default function AdminPincodesPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminPincodesPage() {
+  return (
+    <Suspense fallback={<AdminTableSkeleton rows={8} columns={5} />}>
+      <AdminPincodesContent />
+    </Suspense>
   );
 }
