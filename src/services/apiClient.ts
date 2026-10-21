@@ -7,7 +7,7 @@ import { safeStorage } from "@/lib/storage";
  * 1. LocalStorage override ('admin_api_override_url') — allows instant dynamic switching in browser
  * 2. process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL
  * 3. Localhost fallback (if running on localhost/127.0.0.1)
- * 4. Default Production Railway URL (https://web-production-9265a.up.railway.app/api/v1)
+ * 4. Default Production Railway URL (https://api.nvit.space/api/v1)
  */
 export const getApiBaseUrl = (): string => {
   const overrideUrl = typeof window !== "undefined" ? safeStorage.getItem("admin_api_override_url") : null;
@@ -20,7 +20,7 @@ export const getApiBaseUrl = (): string => {
     ) {
       return "http://localhost:5001/api/v1";
     }
-    return "https://web-production-9265a.up.railway.app/api/v1";
+    return "https://api.nvit.space/api/v1";
   }
 
   const clean = envUrl.trim().replace(/\/+$/, "");
