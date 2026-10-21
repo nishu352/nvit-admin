@@ -166,13 +166,28 @@ function AdminCompaniesContent() {
     setStatus(company.status || "ACTIVE");
     setActiveTab("DETAILS");
 
+    // Pre-populate bank categories from company object if available
+    if (Array.isArray(company.bankCategories) && company.bankCategories.length > 0) {
+      const initialMapped = company.bankCategories.map((cc: any) => ({
+        bankId: cc.bankId || cc.bank?.id,
+        bankName: cc.bank?.name || "Unknown Bank",
+        bankCode: cc.bank?.code || "CODE",
+        category: cc.category || "CAT A",
+        status: cc.status || "APPROVED",
+        remarks: cc.remarks || "",
+      }));
+      setCompanyBankCategories(initialMapped);
+    } else {
+      setCompanyBankCategories([]);
+    }
+
     try {
       const res = await apiClient.get(`/admin/companies/${company.id}`);
       if (res.data?.success && res.data.data) {
         const cData = res.data.data;
         const categoriesList = cData.bankCategories || cData.companyCategories || [];
         const mapped = categoriesList.map((cc: any) => ({
-          bankId: cc.bankId,
+          bankId: cc.bankId || cc.bank?.id,
           bankName: cc.bank?.name || "Unknown Bank",
           bankCode: cc.bank?.code || "CODE",
           category: cc.category || "CAT A",
@@ -182,7 +197,7 @@ function AdminCompaniesContent() {
         setCompanyBankCategories(mapped);
       }
     } catch {
-      setCompanyBankCategories([]);
+      // Retain existing company bankCategories if network fetch fails
     }
 
     setShowEditModal(true);
